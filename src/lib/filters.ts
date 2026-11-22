@@ -2,7 +2,8 @@
  * Experience filters <-> URL search params. Pure, so it can be unit tested.
  *
  * URL keys: company (slug), position (id), outcome, industry, format,
- * month (YYYY-MM), q (text), sort (newest | helpful). Unknown or malformed
+ * arrangement (remote | hybrid | on_site), month (YYYY-MM), q (text),
+ * sort (newest | helpful). Unknown or malformed
  * values are dropped, so a hand-edited URL can't put the page in a bad state.
  */
 
@@ -10,10 +11,12 @@ import {
   INDUSTRIES,
   INTERVIEW_FORMATS,
   OUTCOMES,
+  WORK_ARRANGEMENTS,
   isOneOf,
   type Industry,
   type InterviewFormat,
   type Outcome,
+  type WorkArrangement,
 } from './options'
 
 export const SORTS = ['newest', 'helpful'] as const
@@ -31,6 +34,7 @@ export interface ExperienceFilters {
   outcome?: Outcome
   industry?: Industry
   format?: InterviewFormat
+  arrangement?: WorkArrangement
   /** YYYY-MM */
   month?: string
   /** Text matched against company and position names. */
@@ -39,7 +43,16 @@ export interface ExperienceFilters {
 }
 
 /** The filter keys (everything except sort). */
-export const FILTER_KEYS = ['company', 'position', 'outcome', 'industry', 'format', 'month', 'q'] as const
+export const FILTER_KEYS = [
+  'company',
+  'position',
+  'outcome',
+  'industry',
+  'format',
+  'arrangement',
+  'month',
+  'q',
+] as const
 export type FilterKey = (typeof FILTER_KEYS)[number]
 
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/
@@ -57,6 +70,7 @@ export function parseFilters(params: URLSearchParams): ExperienceFilters {
   const outcome = clean(params.get('outcome'))
   const industry = clean(params.get('industry'))
   const format = clean(params.get('format'))
+  const arrangement = clean(params.get('arrangement'))
   const month = clean(params.get('month'))
   const q = clean(params.get('q'))?.slice(0, MAX_QUERY_LENGTH)
   const sort = clean(params.get('sort'))
@@ -67,6 +81,7 @@ export function parseFilters(params: URLSearchParams): ExperienceFilters {
     outcome: isOneOf(OUTCOMES, outcome) ? outcome : undefined,
     industry: isOneOf(INDUSTRIES, industry) ? industry : undefined,
     format: isOneOf(INTERVIEW_FORMATS, format) ? format : undefined,
+    arrangement: isOneOf(WORK_ARRANGEMENTS, arrangement) ? arrangement : undefined,
     month: month && MONTH_RE.test(month) ? month : undefined,
     q,
     sort: isOneOf(SORTS, sort) ? sort : DEFAULT_SORT,

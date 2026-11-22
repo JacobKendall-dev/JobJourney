@@ -1,11 +1,15 @@
 /** Browse experiences — /experiences. Public; filters live in the URL. */
 
-import { PageShell, Placeholder } from '@/components/PageShell'
+import { SearchX } from 'lucide-react'
+import { EmptyState } from '@/components/EmptyState'
+import { PageShell } from '@/components/PageShell'
 import { useExperienceFilters } from '@/hooks/useExperienceFilters'
 
 export default function BrowseExperiencesPage() {
-  const { filters, setFilters, clearFilters, activeCount } = useExperienceFilters()
+  const { filters, clearFilters, activeCount } = useExperienceFilters()
 
+  // Experiences arrive in the "Browse with filters" step; until then the list
+  // is always empty, so this shows the page's real empty state.
   return (
     <PageShell
       title="Browse experiences"
@@ -13,36 +17,13 @@ export default function BrowseExperiencesPage() {
         filters.q ? `Searching for “${filters.q}”` : 'Real application timelines, shared by job seekers.'
       }
     >
-      <Placeholder>
-        <p>Filter bar and experience cards arrive in the “Browse with filters” step.</p>
-        {/* Temporary readout for testing useExperienceFilters; replaced by FilterBar. */}
-        <pre className="mt-3 overflow-x-auto text-xs">{JSON.stringify(filters, null, 2)}</pre>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <button
-            type="button"
-            className="rounded-md border border-border px-2 py-1 text-xs"
-            onClick={() => setFilters({ outcome: 'offer' })}
-          >
-            Outcome: offer
-          </button>
-          <button
-            type="button"
-            className="rounded-md border border-border px-2 py-1 text-xs"
-            onClick={() => setFilters({ sort: filters.sort === 'newest' ? 'helpful' : 'newest' })}
-          >
-            Toggle sort
-          </button>
-          {activeCount > 0 && (
-            <button
-              type="button"
-              className="rounded-md border border-border px-2 py-1 text-xs"
-              onClick={clearFilters}
-            >
-              Clear filters ({activeCount})
-            </button>
-          )}
-        </div>
-      </Placeholder>
+      <EmptyState
+        icon={<SearchX aria-hidden />}
+        title={activeCount > 0 ? 'No experiences match these filters yet.' : 'No experiences shared yet.'}
+        description="Applied somewhere recently? Your experience helps the next person."
+        action={{ label: 'Share yours', to: '/experiences/new' }}
+        secondaryAction={activeCount > 0 ? { label: 'Clear filters', onClick: clearFilters } : undefined}
+      />
     </PageShell>
   )
 }

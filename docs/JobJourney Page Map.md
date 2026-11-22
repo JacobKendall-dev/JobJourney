@@ -64,7 +64,7 @@ Generouted file names: `(app)` and `(protected)` are groups and don't appear in 
 **Purpose:** the main research tool.
 
 - **Data:** one live subscription to all experiences, plus companies and positions for names. Filtering, sorting, counting and paging all happen in the browser. In the browser, `useQuery` has `where`, `orderBy`, `orderDir` and `limit`, but no `offset` and no total, so paging on the server can't give a correct count or work with filters that run in the browser. At this size, loading everything is fine, and the list updates live.
-- **Filter bar:** company, position, outcome, industry, interview format, applied month, a text box (`q`) matching company and position names, and sort by **Newest** or **Most helpful**.
+- **Filter bar:** company, position, outcome, industry, interview format, work arrangement (Remote / Hybrid / On-site), applied month, a text box (`q`) matching company and position names, and sort by **Newest** or **Most helpful**.
 - **Filters live in the URL** (`/experiences?company=example-technologies&outcome=offer&q=intern`), so a filtered view can be shared or bookmarked, and links from the home search and company pages land pre-filtered. The URL uses the company's `slug`; the page looks up its ID.
 - **Results:** a count ("24 experiences"), then experience cards, then **Load more**, which shows 20 more of the filtered results.
 - **Clear filters** link whenever any filter is on.
@@ -79,6 +79,7 @@ Generouted file names: `(app)` and `(protected)` are groups and don't appear in 
 - **Byline:** "Shared anonymously" or "Shared by {authorName}", plus "Applied {appliedMonth}". The page doesn't show the exact posting time. That's a display choice only: `createdAt` still reaches the browser.
 - **Timeline facts:**
   - First response: "8 days", or "No response yet" when `noResponse` is true.
+  - Work arrangement: Remote, Hybrid or On-site, when given.
   - Interview stages: "3".
   - Interview format chips.
 - **Interview experience** and **Advice** as plain text (never rendered as HTML).
@@ -105,9 +106,10 @@ Generouted file names: `(app)` and `(protected)` are groups and don't appear in 
 One page, in four short sections:
 
 1. **Where you applied**
-   - **Company:** type to search existing companies. Not found → **"+ Add {name}"** opens a small inline form (name, industry, location, website) that creates the company directly (members can; it starts **unverified**). It uses **`createConfirmed`**, so the form waits until the server accepts. If the slug is taken, show "That company already exists" inline instead of a late toast.
+   - **Company:** type to search existing companies. Not found → **"+ Add {name}"** opens a small inline form (name, industry, headquarters city, website) that creates the company directly (members can; it starts **unverified**). It uses **`createConfirmed`**, so the form waits until the server accepts. If the slug is taken, show "That company already exists" inline instead of a late toast.
    - **Position:** pick from that company's positions, or **"+ Add position"** (title, level, category), also with `createConfirmed`.
    - **Applied:** month and year picker (→ `appliedMonth`, `2026-09`). Future months disabled.
+   - **Work arrangement** (optional): Remote, Hybrid or On-site (→ `workArrangement`).
 2. **How it went**
    - **First response:** number of days, or a **"No response yet"** option. That sets `noResponse: true` and leaves `firstResponseDays` empty. Leaving both empty means "didn't say".
    - **Interview stages:** stepper, 0–10.
@@ -144,7 +146,7 @@ One page, in four short sections:
 
 ### Company profile — `/companies/:slug`
 
-- **Header:** company name, **Verified** badge or a quiet "Unverified · added by the community" label, industry, location, website link.
+- **Header:** company name, **Verified** badge or a quiet "Unverified · added by the community" label, industry, headquarters city, website link.
 - **At a glance** (computed in the browser from this company's experiences):
   - number of experiences
   - outcome breakdown (e.g., 6 offers · 10 rejected · 5 ghosted)
@@ -178,6 +180,7 @@ One page, in four short sections:
 
 Visible in the menu only for admins. The page checks the role, and every admin action re-checks it on the server.
 
+- **Sample data:** a **Load sample data** button (`seedSampleData`) adds five clearly-labelled sample companies with their positions. Safe to press more than once.
 - **Unverified companies:** a queue with name, website, date added, and **Verify** buttons (`setCompanyVerified`).
 - **Companies with no experiences:** candidates for cleanup, with **Delete** (`deleteCompany`, which also removes the company's positions).
 - **Recent experiences:** newest posts with **Delete** for moderation (`deleteExperience`). Admins don't see who wrote them.

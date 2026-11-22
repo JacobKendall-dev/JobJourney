@@ -21,6 +21,10 @@ export type Category = (typeof CATEGORIES)[number]
 export const OUTCOMES = ['offer', 'rejected', 'ghosted', 'withdrew', 'in_progress'] as const
 export type Outcome = (typeof OUTCOMES)[number]
 
+/** Where the job was done. A property of the job (experience), not the company. */
+export const WORK_ARRANGEMENTS = ['remote', 'hybrid', 'on_site'] as const
+export type WorkArrangement = (typeof WORK_ARRANGEMENTS)[number]
+
 export const INTERVIEW_FORMATS = [
   'phone_screen',
   'online_assessment',
@@ -54,6 +58,10 @@ export const LABELS: Record<string, string> = {
   ghosted: 'Ghosted',
   withdrew: 'Withdrew',
   in_progress: 'In progress',
+  // work arrangements
+  remote: 'Remote',
+  hybrid: 'Hybrid',
+  on_site: 'On-site',
   // interview formats
   phone_screen: 'Phone screen',
   online_assessment: 'Online assessment',

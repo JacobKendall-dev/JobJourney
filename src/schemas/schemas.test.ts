@@ -16,6 +16,7 @@ import {
 } from 'deepspace/server'
 import { schemas } from '../schemas'
 import { companiesSchema } from './companies-schema'
+import { experiencesSchema } from './experiences-schema'
 import { positionsSchema } from './positions-schema'
 import { usersSchema } from './users-schema'
 
@@ -98,6 +99,27 @@ describe('positions', () => {
 
   it('the same title and level cannot be added twice for a company', () => {
     expect(positionsSchema.uniqueOn).toEqual(['companyId', 'title', 'level'])
+  })
+})
+
+describe('experiences', () => {
+  it('everyone can read, including signed-out visitors', () => {
+    for (const role of ['viewer', 'member', 'admin']) {
+      expect(canRead(experiencesSchema, role, record(), 'someone', noopPermissionContext)).toBe(true)
+    }
+  })
+
+  it('no role writes directly — every write goes through an action', () => {
+    for (const role of ['viewer', 'member', 'admin']) {
+      expect(canCreate(experiencesSchema, role)).toBe(false)
+      expect(canUpdate(experiencesSchema, role, record('me'), 'me', noopPermissionContext)).toBe(false)
+      expect(canDelete(experiencesSchema, role, record('me'), 'me', noopPermissionContext)).toBe(false)
+    }
+  })
+
+  it('company and position can never change', () => {
+    const immutable = experiencesSchema.columns.filter((c) => c.immutable).map((c) => c.name)
+    expect(immutable).toEqual(['companyId', 'positionId'])
   })
 })
 

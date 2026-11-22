@@ -7,7 +7,7 @@ describe('parseFilters', () => {
   it('reads every filter from the URL', () => {
     expect(
       parse(
-        'company=example-technologies&position=pos_1&outcome=offer&industry=finance&format=take_home&month=2026-09&q=intern&sort=helpful',
+        'company=example-technologies&position=pos_1&outcome=offer&industry=finance&format=take_home&arrangement=on_site&month=2026-09&q=intern&sort=helpful',
       ),
     ).toEqual({
       company: 'example-technologies',
@@ -15,6 +15,7 @@ describe('parseFilters', () => {
       outcome: 'offer',
       industry: 'finance',
       format: 'take_home',
+      arrangement: 'on_site',
       month: '2026-09',
       q: 'intern',
       sort: 'helpful',
@@ -28,6 +29,7 @@ describe('parseFilters', () => {
       outcome: undefined,
       industry: undefined,
       format: undefined,
+      arrangement: undefined,
       month: undefined,
       q: undefined,
       sort: 'newest',
@@ -36,9 +38,10 @@ describe('parseFilters', () => {
 
   it('drops unknown and malformed values', () => {
     const filters = parse(
-      'company=../etc&position=a%20b&outcome=hired&industry=space&format=lunch&month=2026-13&sort=oldest',
+      'company=../etc&position=a%20b&outcome=hired&industry=space&format=lunch&arrangement=moon&month=2026-13&sort=oldest',
     )
     expect(filters).toMatchObject({
+      arrangement: undefined,
       company: undefined,
       position: undefined,
       outcome: undefined,

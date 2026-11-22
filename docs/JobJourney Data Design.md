@@ -51,6 +51,7 @@ CareerTrail's data model: the **collections** (tables), their fields, who can do
 | Added a `deleteCompany` action; admins can no longer delete companies directly. | A company deleted while it has experiences would leave posts pointing at nothing. The action refuses in that case and removes the company's positions otherwise. |
 | The app owner caveat is added to the remaining risks. | People who control the app's code can still read authorship server-side; the privacy promise is about other users. |
 | Browse loads all experiences and filters and pages in the browser. | In the browser, `useQuery` has no `offset` and no total count, so paging on the server can't give a correct count or work with browser filters. |
+| Added `workArrangement` (Remote / Hybrid / On-site) to experiences, and company `location` now means the headquarters city. | The arrangement describes the job, not the company: one company can have remote, hybrid and on-site roles, and job seekers want to filter by it. |
 
 ## How the collections connect
 
@@ -80,7 +81,7 @@ Two storage facts to remember (checked in SDK 0.44.2):
 - `name` (text, required, `maxLength` 100): "Example Technologies"
 - `slug` (text, required, `maxLength` 100): URL-friendly name, `example-technologies`, used in `/companies/example-technologies`. **`uniqueOn: ['slug']`**.
 - `industry` (`select`): technology, finance, healthcare, government, other
-- `location` (text, optional)
+- `location` (text, optional, `maxLength` 100): the **headquarters city**, e.g. "Austin, TX", or "Remote" for a fully remote company. Whether a particular job was remote is `workArrangement` on the experience.
 - `website` (`url`, optional)
 - `verified` (`boolean`, **`default: false`**): shows a "Verified" badge so viewers know the company is real. **Only an admin can change it.** Members can't write it, because it's left out of their `writableFields`. New companies always start unverified, and the default doesn't count as a member write.
 - `verifiedBy` (user id, optional): set by `setCompanyVerified`
@@ -107,6 +108,7 @@ Written **only** by actions, and **always as the app owner**, so `createdBy` is 
 - `interviewStages` (number, 0–10)
 - `interviewFormats` (`json`, a list of choices): phone screen, online assessment, technical, behavioral, take-home, final round. Stored as `json` so it reads back as an array; actions check every entry against this list.
 - `outcome` (`select`): offer, rejected, ghosted, withdrew, in progress
+- `workArrangement` (`select`, optional): remote, hybrid, on-site. A property of the job, not the company, since one company can have all three.
 - `interviewExperience` (long text, `maxLength` 2000)
 - `advice` (long text, `maxLength` 2000)
 - `helpfulCount`, `commentCount` (number storage, `default: 0`): set only by actions, by recounting. Number storage is needed so "most helpful" sorts correctly.
@@ -226,6 +228,7 @@ Remember: **record permissions are OFF inside actions** (`X-App-Action: 'true'`)
 | `toggleHelpful` | Looks for this user's vote. Removes it if found, creates one if not. Then **recounts** the experience's votes and writes `helpfulCount`. | Signed in. Experience exists. The user isn't its author (check `experienceAuthors`). A "Duplicate" error from `uniqueOn` means a vote already exists, so treat it as success. Recounting must page through results (`offset`/`nextOffset`), because a query returns 50 records by default. |
 | `postComment` | Creates the comment as the caller, with `authorName` from their `users` row. Then **recounts** `commentCount`. Later: creates a notification. | Signed in. Experience exists. `body` is 1–1,000 characters. If `parentId` is set, that comment exists, belongs to the same experience and has no `parentId` itself (no reply chains). |
 | `setCompanyVerified` | Sets `verified` to true or false and sets `verifiedBy` to the admin's ID. `verifiedAt` is stamped by `timestampTrigger`. | The user is an admin (`resolveAppRole`). |
+| `seedSampleData` | Adds the sample companies and positions, skipping any that already exist. Sample experiences come later, through `createExperience`. | The user is an admin. Every sample name starts with Example, Sample, Demo or Placeholder. |
 | `deleteCompany` | Deletes a company and its positions (`deleteWhere({ companyId })`). | The user is an admin. **Refuses** if any experience has this `companyId` (query with `limit: 1`), and says how to resolve it: delete or move those experiences first. |
 
 Not actions (handled by permission rules): creating a company or position, editing or soft-deleting your own comment (the UI sets `deleted: true` and `body: ""` together), and bookmarks.
@@ -256,6 +259,7 @@ Not actions (handled by permission rules): creating a company or position, editi
 | Applied month | Match `appliedMonth` |
 | Industry | Load companies, keep those in the industry, then filter experiences by `companyId` |
 | Interview format | `interviewFormats.includes(choice)` |
+| Work arrangement | Match `workArrangement` |
 | Text (`q`) | Match company and position names |
 | Sort | Newest (`createdAt`) or most helpful (`helpfulCount`) |
 

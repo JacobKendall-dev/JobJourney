@@ -71,6 +71,10 @@ Column options used below:
 - `immutable`: the field can't change after it's created.
 - `timestampTrigger`: the server sets the time when another field changes.
 
+Two storage facts to remember (checked in SDK 0.44.2):
+- **`select` options aren't enforced.** The server stores any text. Actions validate the choices they write. For fields members write directly (company industry, position level and category), the UI shows unknown values as "Other".
+- **Booleans read back as `0` / `1`**, not `true` / `false`. Never compare a stored boolean with `=== true`; use a helper (`isTrue` in `src/lib/options.ts`).
+
 ### companies
 
 - `name` (text, required, `maxLength` 100): "Example Technologies"

@@ -11,7 +11,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { AuthOverlay, useAuthProfileReady, signOut } from 'deepspace'
-import { Bookmark, ChevronDown, FileText, LogOut, Menu, Shield, X } from 'lucide-react'
+import { Bookmark, ChevronDown, FileText, LogOut, Menu, Settings, Shield, X } from 'lucide-react'
 import { APP_NAME } from '../constants'
 import type { Role } from '../constants'
 import { nav } from '../nav'
@@ -148,6 +148,10 @@ export default function Navigation() {
                     Admin
                   </DropdownMenuItem>
                 )}
+                <DropdownMenuItem onClick={() => navigate('/settings')}>
+                  <Settings aria-hidden />
+                  Settings
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => signOut()}>
                   <LogOut aria-hidden />

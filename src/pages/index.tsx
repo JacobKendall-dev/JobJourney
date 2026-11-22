@@ -25,25 +25,70 @@ export default function Landing() {
   return (
     <>
       <Seo {...seo} path="/" />
-      <div
-        data-testid="static-landing"
-        className="flex min-h-screen flex-col items-center justify-center px-6 text-center"
-      >
-        <p className="mb-3 text-sm uppercase tracking-widest text-muted-foreground">{APP_NAME}</p>
-        <h1 className="mb-4 max-w-2xl text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
-          A DeepSpace app with a static front door
-        </h1>
-        <p className="mb-8 max-w-md text-muted-foreground">
-          This landing page ships no auth call and no realtime connection — it's a
-          plain static page. The live app, with sign-in and synced data, lives
-          behind the link below.
-        </p>
-        <Link
-          to="/home"
-          className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
-        >
-          Enter the app
-        </Link>
+      <div data-testid="static-landing" className="flex min-h-screen flex-col">
+        {/* Static pages have no auth, so this bar has no account menu. */}
+        <header className="border-b border-border">
+          <div className="mx-auto flex h-12 w-full max-w-[1100px] items-center gap-4 px-4 sm:px-6">
+            <Link to="/" className="text-sm font-semibold text-foreground">
+              {APP_NAME}
+            </Link>
+            <Link to="/experiences" className="text-sm text-muted-foreground hover:text-foreground">
+              Browse
+            </Link>
+            <Link to="/companies" className="text-sm text-muted-foreground hover:text-foreground">
+              Companies
+            </Link>
+            <div className="flex-1" />
+            <Link
+              to="/experiences/new"
+              className="hidden rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90 sm:inline-flex"
+            >
+              Share your experience
+            </Link>
+          </div>
+        </header>
+
+        <main className="flex flex-1 flex-col items-center justify-center px-6 py-16 text-center">
+          <h1 className="mb-4 max-w-2xl text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
+            See what happens after you apply.
+          </h1>
+          <p className="mb-8 max-w-md text-muted-foreground">
+            Real application timelines, interview stages and advice, shared anonymously by job
+            seekers.
+          </p>
+
+          {/* A plain GET form: it reaches /experiences?q=… even before JavaScript loads. */}
+          <form
+            action="/experiences"
+            method="get"
+            role="search"
+            className="flex w-full max-w-md flex-col gap-2 sm:flex-row"
+          >
+            <label htmlFor="landing-search" className="sr-only">
+              Search by company or position
+            </label>
+            <input
+              id="landing-search"
+              name="q"
+              type="search"
+              placeholder="Search a company or position"
+              className="h-10 flex-1 rounded-md border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+            <button
+              type="submit"
+              className="h-10 rounded-md border border-border px-4 text-sm font-medium text-foreground hover:bg-muted"
+            >
+              Search
+            </button>
+          </form>
+
+          <Link
+            to="/experiences/new"
+            className="mt-6 inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
+          >
+            Share your experience
+          </Link>
+        </main>
       </div>
     </>
   )

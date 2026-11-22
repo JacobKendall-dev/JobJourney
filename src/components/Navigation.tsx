@@ -9,9 +9,9 @@
  */
 
 import { useState, useEffect } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { AuthOverlay, useAuthProfileReady, signOut } from 'deepspace'
-import { ChevronDown, LogOut, Menu, X } from 'lucide-react'
+import { Bookmark, ChevronDown, FileText, LogOut, Menu, Shield, X } from 'lucide-react'
 import { APP_NAME } from '../constants'
 import type { Role } from '../constants'
 import { nav } from '../nav'
@@ -31,6 +31,7 @@ import {
 export default function Navigation() {
   const { isLoaded, isSignedIn, user, userLoading } = useAuthProfileReady({ requireUser: true })
   const location = useLocation()
+  const navigate = useNavigate()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [showAuthModal, setShowAuthModal] = useState(false)
 
@@ -71,13 +72,20 @@ export default function Navigation() {
     <>
       <nav data-testid="app-navigation" className="border-b border-border bg-background">
         <div className="mx-auto flex h-12 max-w-7xl items-center gap-4 px-4">
-          <Link to="/home" className="text-sm font-semibold text-foreground">
+          <Link to="/" className="text-sm font-semibold text-foreground">
             {APP_NAME}
           </Link>
 
           <div className="hidden items-center md:flex">{visibleNav.map(navLink)}</div>
 
           <div className="flex-1" />
+
+          <Link
+            to="/experiences/new"
+            className="hidden rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90 sm:inline-flex"
+          >
+            Share your experience
+          </Link>
 
           {!isLoaded ? null : isSignedIn && !profileReady ? (
             /* Signed in, profile still loading — skeleton pill, never the
@@ -126,6 +134,21 @@ export default function Navigation() {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => navigate('/me')}>
+                  <FileText aria-hidden />
+                  My posts
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/bookmarks')}>
+                  <Bookmark aria-hidden />
+                  Bookmarks
+                </DropdownMenuItem>
+                {userRole === 'admin' && (
+                  <DropdownMenuItem onClick={() => navigate('/admin')}>
+                    <Shield aria-hidden />
+                    Admin
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => signOut()}>
                   <LogOut aria-hidden />
                   Sign out
@@ -155,6 +178,9 @@ export default function Navigation() {
         {mobileMenuOpen && (
           <div className="flex flex-col border-t border-border px-2 py-2 md:hidden">
             {visibleNav.map(navLink)}
+            <Link to="/experiences/new" className="px-3 py-1.5 text-sm font-medium text-foreground">
+              Share your experience
+            </Link>
           </div>
         )}
       </nav>

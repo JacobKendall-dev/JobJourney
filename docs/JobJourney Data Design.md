@@ -12,7 +12,7 @@ CareerTrail's data model: the **collections** (tables), their fields, who can do
 2. **Anonymous by default.** Posting requires an account, but the author's name is hidden unless they choose to show it.
 3. **Anonymity has to be real, not just hidden in the UI.** Realtime sync sends whole records to every browser in the room, and DeepSpace stamps every record with `createdBy`, the user who wrote it. Readers receive that field too, even when the write comes from an action. So:
    - The public `experiences` record **never stores who wrote it**. No author field exists, and every experience is written **as the app owner** (`env.OWNER_USER_ID`), so `createdBy` is the same owner ID on every post.
-   - Authorship lives in a separate **private** collection, `experienceAuthors`. That row is written as the real author, so its `createdBy` *is* the author, and only the author and admins can read it.
+   - Authorship lives in a separate **private** collection, `experienceAuthors`. That row is written as the real author, so its `createdBy` *is* the author, and **only the author can read it**. Admins can't read other people's rows either.
    - Creating, editing and deleting experiences goes through **actions** that check `experienceAuthors`.
    - DeepSpace can't hide individual fields from readers; permissions apply to whole records. So the separate collection is required.
 4. **One helpful vote per user per experience**, enforced by the database (`uniqueOn`), not just by disabling a button.
@@ -39,6 +39,18 @@ CareerTrail's data model: the **collections** (tables), their fields, who can do
 | The stretch goal "discussions" gets its own `discussionReplies` collection. | `comments.experienceId` is required, so discussion replies can't reuse `comments`. |
 | Agent tools become read-only. | They follow your permission rules, but they can still create, update and delete anything the user can. Read-only removes the prompt-injection risk of a post telling an agent to delete things. |
 | `.gitignore` adds `.env`, `.env.*` and `.claude/settings.local.json`. Added GitHub-source rules. | `.dev.vars` was covered, but `.env` files weren't. Under GitHub source, a deploy ships the working tree exactly as it is. |
+
+**Second round, after the page map review**
+
+| What changed | Why |
+| --- | --- |
+| Admins lose read access to other people's `experienceAuthors` rows; they get `read: 'own'` like members. | Moderators can delete posts without knowing who wrote them, and it keeps "Only you can see this list" on My posts true for every user. |
+| Added `noResponse` (boolean) to experiences. | The share form offers "No response yet". Without a flag, an empty `firstResponseDays` can't tell "no response yet" apart from "didn't say". |
+| `companyId` and `positionId` on experiences are `immutable`. | The edit page doesn't let them change; now the server refuses it too. |
+| `updateExperience` sets `authorName` from the user's account. | The edit page can switch between anonymous and named, and the name must never come from the browser. |
+| Added a `deleteCompany` action; admins can no longer delete companies directly. | A company deleted while it has experiences would leave posts pointing at nothing. The action refuses in that case and removes the company's positions otherwise. |
+| The app owner caveat is added to the remaining risks. | People who control the app's code can still read authorship server-side; the privacy promise is about other users. |
+| Browse loads all experiences and filters and pages in the browser. | In the browser, `useQuery` has no `offset` and no total count, so paging on the server can't give a correct count or work with browser filters. |
 
 ## How the collections connect
 
@@ -82,11 +94,12 @@ Column options used below:
 
 Written **only** by actions, and **always as the app owner**, so `createdBy` is the owner on every experience.
 
-- `companyId`, `positionId` (required)
+- `companyId`, `positionId` (required, `immutable`): an edit can't move a post to another company or position
 - `isAnonymous` (`boolean`, **default true**)
 - `authorName` (text, optional): filled **only** when the author chooses to show their name. A copy of the name, not a link to the user.
 - `appliedMonth` (text, `2026-09`): month only, not the exact day, so posts are harder to trace back to a person
-- `firstResponseDays` (number, optional)
+- `firstResponseDays` (number, optional): empty when the author didn't say, or when `noResponse` is true
+- `noResponse` (`boolean`, `default: false`): true means "no response yet". `firstResponseDays` must then be empty.
 - `interviewStages` (number, 0–10)
 - `interviewFormats` (`json`, a list of choices): phone screen, online assessment, technical, behavioral, take-home, final round. Stored as `json` so it reads back as an array; actions check every entry against this list.
 - `outcome` (`select`): offer, rejected, ghosted, withdrew, in progress
@@ -145,10 +158,10 @@ Who:
 
 | Collection | Read | Create | Update | Delete |
 | --- | --- | --- | --- | --- |
-| companies | everyone | member, `writableFields: name, slug, industry, location, website` | admin (incl. `verified`) | admin |
+| companies | everyone | member, `writableFields: name, slug, industry, location, website` | admin (incl. `verified`) | action only (`deleteCompany`) |
 | positions | everyone | member, `writableFields: companyId, title, level, category` | admin | admin |
 | experiences | everyone | action only | action only (author) | action only (author or admin) |
-| experienceAuthors | member: `own`. admin: all | action only | nobody | action only |
+| experienceAuthors | member and admin: `own` only | action only | nobody | action only |
 | comments | everyone | action only (`postComment`) | member: `own`, `writableFields: body, deleted`. admin: all | admin (the `deleteExperience` cascade) |
 | helpfulVotes | member: `own`. admin: all | action only | nobody | action only |
 | bookmarks | member: `own` | member | nobody | member: `own` |
@@ -163,9 +176,17 @@ permissions: {
   viewer: { read: true, create: false, update: false, delete: false },
   member: { read: true, create: true, update: false, delete: false,
             writableFields: ['name', 'slug', 'industry', 'location', 'website'] },
-  admin:  { read: true, create: true, update: true, delete: true },
+  admin:  { read: true, create: true, update: true, delete: false }, // delete via deleteCompany
 },
 uniqueOn: ['slug'],
+
+// experienceAuthors: nobody, admins included, reads another person's row
+permissions: {
+  viewer: { read: false, create: false, update: false, delete: false },
+  member: { read: 'own', create: false, update: false, delete: false },
+  admin:  { read: 'own', create: false, update: false, delete: false },
+},
+uniqueOn: ['experienceId'],
 
 // bookmarks
 permissions: {
@@ -179,6 +200,8 @@ uniqueOn: ['experienceId', 'userId'],
 **Why some of these choices**
 
 - **Experiences are action-only** because the author check depends on the private `experienceAuthors` collection, every write must be done as the owner to keep `createdBy` anonymous, and users must not be able to set `helpfulCount`.
+- **Authorship is readable only by the author.** Admins moderate with `deleteExperience` and never need to know who wrote a post. Queries for "my posts" should still include `where: { createdBy: user.id }` so the intent is explicit.
+- **Companies are deleted only through `deleteCompany`**, so a company with experiences can't disappear from under them.
 - **Votes are readable only by the voter.** Pages show `helpfulCount`, and nobody can browse who voted for what.
 - **Members can add companies and positions** so the site isn't limited to what you seed. `uniqueOn` prevents duplicates, `writableFields` keeps `verified` out of their reach, and admins can clean up. Nothing checks that a position's `companyId` exists, so admins should watch for stray positions.
 - **Test every row with two accounts and while signed out** in `npm test`. That's the multi-user verification DeepSpace looks for.
@@ -194,11 +217,12 @@ Remember: **record permissions are OFF inside actions** (`X-App-Action: 'true'`)
 | Action | What it does | Checks it must make |
 | --- | --- | --- |
 | `createExperience` | Creates the public experience **with the owner tools**, then its `experienceAuthors` row **with the caller tools**. Sets `authorName` only if the user chose to show it, from their `users` row. | Signed in. Company and position exist, and the position belongs to the company. Fields pass validation (below). Never copy the user ID onto the experience. If creating the author row fails, delete the experience. |
-| `updateExperience` | Edits an experience's details, with the owner tools. | An `experienceAuthors` row exists with this `experienceId` and `createdBy` = this user. Only accepts content fields, never `helpfulCount`, `commentCount` or `authorName` sent from the browser. |
+| `updateExperience` | Edits an experience's details, with the owner tools. Sets `authorName` from the user's `users` row when "Show my name" is on, and clears it when it's off. | An `experienceAuthors` row exists with this `experienceId` and `createdBy` = this user. Only accepts content fields and the anonymity choice, never `companyId`, `positionId`, `helpfulCount`, `commentCount` or `authorName` sent from the browser. Fields pass validation. |
 | `deleteExperience` | Deletes the experience (owner tools), then its author row, votes, bookmarks and comments with `deleteWhere({ experienceId })`. Repeats each until fewer than the limit are deleted. | The user is the author **or** an admin. Every `deleteWhere` must be scoped to this `experienceId`. |
 | `toggleHelpful` | Looks for this user's vote. Removes it if found, creates one if not. Then **recounts** the experience's votes and writes `helpfulCount`. | Signed in. Experience exists. The user isn't its author (check `experienceAuthors`). A "Duplicate" error from `uniqueOn` means a vote already exists, so treat it as success. Recounting must page through results (`offset`/`nextOffset`), because a query returns 50 records by default. |
 | `postComment` | Creates the comment as the caller, with `authorName` from their `users` row. Then **recounts** `commentCount`. Later: creates a notification. | Signed in. Experience exists. `body` is 1–1,000 characters. If `parentId` is set, that comment exists, belongs to the same experience and has no `parentId` itself (no reply chains). |
 | `setCompanyVerified` | Sets `verified` to true or false and sets `verifiedBy` to the admin's ID. `verifiedAt` is stamped by `timestampTrigger`. | The user is an admin (`resolveAppRole`). |
+| `deleteCompany` | Deletes a company and its positions (`deleteWhere({ companyId })`). | The user is an admin. **Refuses** if any experience has this `companyId` (query with `limit: 1`), and says how to resolve it: delete or move those experiences first. |
 
 Not actions (handled by permission rules): creating a company or position, editing or soft-deleting your own comment (the UI sets `deleted: true` and `body: ""` together), and bookmarks.
 
@@ -216,19 +240,20 @@ Not actions (handled by permission rules): creating a company or position, editi
 
 - Required: company, position, outcome, and at least one of interview experience or advice
 - `interviewStages` 0–10. `firstResponseDays` 0–365.
+- `noResponse` and `firstResponseDays` can't both be set
 - `appliedMonth` matches `YYYY-MM` and isn't in the future
 - Choice fields, including each entry in `interviewFormats`, only accept the listed options
 
-**Search and filters** on the experiences page. Queries support exact-match `where`, one `orderBy` (with `orderDir`) and `limit`. There is no "contains", no range filter and no text search. Filtering in the browser is fine at this size, and it's safe, because records a user can't read are never sent to them.
+**Search and filters** on the experiences page. Queries support exact-match `where`, one `orderBy` (with `orderDir`) and `limit`. There is no "contains", no range filter and no text search. In the browser, `useQuery` also has no `offset` and no total count. So Browse subscribes to **all** experiences once and does filtering, counting and "Load more" in the browser. That's fine at this size, the list stays live, and it's safe, because records a user can't read are never sent to them.
 
 | Filter | How |
 | --- | --- |
-| Company, position, outcome | `where` (server) |
-| Applied month | `where: { appliedMonth }` for one month; a range is filtered in the browser |
-| Industry | In the browser. Load companies, keep those in the industry, then filter experiences by `companyId`. |
-| Interview format | In the browser: `interviewFormats.includes(choice)` |
-| Text | In the browser: match company and position names |
-| Sort | `orderBy: 'createdAt'` or `'helpfulCount'`, `orderDir: 'desc'` |
+| Company, position, outcome | Match `companyId`, `positionId`, `outcome` (the URL holds the company slug; look up its ID) |
+| Applied month | Match `appliedMonth` |
+| Industry | Load companies, keep those in the industry, then filter experiences by `companyId` |
+| Interview format | `interviewFormats.includes(choice)` |
+| Text (`q`) | Match company and position names |
+| Sort | Newest (`createdAt`) or most helpful (`helpfulCount`) |
 
 **Seed data:** 4–5 companies, 2–3 positions each, and about 10 experiences covering every outcome, so the filters have something to show. Mark them clearly as sample data (e.g., "Example Technologies"). Real-looking fake reviews would mislead users. Seed experiences are written as the owner like any other experience.
 
@@ -250,7 +275,10 @@ Checked against [Cycode's 11 AI security vulnerabilities](https://cycode.com/blo
 
 **Not applicable** (CareerTrail doesn't train or host its own AI model): model theft, data and model poisoning, vector and embedding weaknesses, system prompt leakage, AI bias, environmental harms, existential risk, job loss.
 
-**Remaining risk to mention in the write-up:** an anonymous post's `createdAt` is public. In a very small community, someone who knows when a person was active could still guess. Showing only `appliedMonth` and hiding the user list reduces this but doesn't remove it.
+**Remaining risks to mention in the write-up:**
+
+- **Timing.** An anonymous post's `createdAt` is public. In a very small community, someone who knows when a person was active could still guess. Showing only `appliedMonth` and hiding the user list reduces this but doesn't remove it.
+- **The app owner.** "Only you can see this list" is true for every *user* of the app, admins included. But anyone who controls the app's server code (the app owner and any collaborators who can deploy) can read `experienceAuthors`, because server actions run with permissions off. The DeepSpace platform also stores that data. The promise protects authors from other users, not from the people who run the app. Don't add code that reads or logs authorship for any other purpose.
 
 **Security checklist before submitting**
 
@@ -259,7 +287,9 @@ Checked against [Cycode's 11 AI security vulnerabilities](https://cycode.com/blo
 - [ ] Two-account and signed-out tests pass for every permission rule
 - [ ] On an anonymous experience, the browser's network and WebSocket data contain no author ID. **`createdBy` equals the app owner's ID**, not the author's (check DevTools).
 - [ ] A second member can't see the first member's `lastSeenAt` in the user list
+- [ ] An admin can't read another person's `experienceAuthors` row
 - [ ] A non-admin can't set `verified`, on create or on update
+- [ ] `deleteCompany` refuses a company that has experiences, and a direct delete of a company is refused for everyone
 - [ ] A member can't create a comment directly, or post a second vote or bookmark
 - [ ] Agent tools are read-only (or disabled)
 - [ ] No raw HTML rendering of user content
@@ -288,14 +318,16 @@ Do one step at a time, and test each before moving on.
 
 **Steps**
 
-- [ ] `.gitignore` additions, first commit, GitHub remote
-- [ ] `users` schema gets `roster: 'read-policy'`, and agent tools become read-only
-- [ ] companies + positions, with seed data
+- [x] `.gitignore` additions, first commit, GitHub remote, first deploy (GitHub source claimed)
+- [ ] Route skeleton (see the page map)
+- [ ] `users` schema gets `roster: 'read-policy'`
+- [ ] companies + positions schemas and shared data hooks, then seed data
+- [ ] Agent tools become read-only (before production)
 - [ ] owner-identity tools in `action-routes.ts`, then experiences + experienceAuthors + `createExperience`, anonymous by default. Check `createdBy` in DevTools.
 - [ ] experiences list with filters, company and position pages
 - [ ] `updateExperience` / `deleteExperience`, tested with a second account
 - [ ] comments + replies + `postComment`
 - [ ] helpfulVotes + `toggleHelpful`, bookmarks
-- [ ] `setCompanyVerified`
+- [ ] `setCompanyVerified`, `deleteCompany`
 - [ ] Playwright tests: signed out, member, other member, admin
 - [ ] Stretch: discussions, notifications

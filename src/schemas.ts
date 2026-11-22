@@ -14,6 +14,9 @@ import { companiesSchema } from './schemas/companies-schema'
 import { positionsSchema } from './schemas/positions-schema'
 import { experiencesSchema } from './schemas/experiences-schema'
 import { experienceAuthorsSchema } from './schemas/experience-authors-schema'
+import { commentsSchema } from './schemas/comments-schema'
+import { helpfulVotesSchema } from './schemas/helpful-votes-schema'
+import { bookmarksSchema } from './schemas/bookmarks-schema'
 
 export const schemas: CollectionSchema[] = [
   usersSchema,
@@ -22,4 +25,7 @@ export const schemas: CollectionSchema[] = [
   positionsSchema,
   experiencesSchema,
   experienceAuthorsSchema,
+  commentsSchema,
+  helpfulVotesSchema,
+  bookmarksSchema,
 ]

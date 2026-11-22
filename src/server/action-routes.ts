@@ -46,7 +46,14 @@ type ResolveAuth = (req: Request, env: Env) => Promise<VerifyResult | null>
  * Actions whose caller is the author of an anonymous post. Their log line
  * omits the caller, so the app's logs never tie a person to a post.
  */
-const AUTHOR_PRIVATE_ACTIONS = new Set(['createExperience', 'updateExperience'])
+const AUTHOR_PRIVATE_ACTIONS = new Set([
+  'createExperience',
+  'updateExperience',
+  // "Owner" comments are anonymous: a caller id next to the comment's time
+  // would say which account is the Owner.
+  'postComment',
+  'updateAuthorComment',
+])
 
 export function registerActionRoutes(app: Hono<AppContext>, resolveAuth: ResolveAuth): void {
   app.post('/api/actions/:name', async (c) => {

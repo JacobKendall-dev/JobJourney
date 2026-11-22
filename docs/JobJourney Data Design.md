@@ -124,9 +124,11 @@ Written by actions **as the author**, so this row's built-in `createdBy` is the 
 Created only by `postComment`, as the commenter, so `createdBy` is the commenter.
 
 - `experienceId` (required, `immutable`)
-- `parentId` (comment id, optional, `immutable`): empty = top-level comment. Set = a reply. Replies go one level deep only.
-- `authorName` (text): copied from the commenter's `users` row by the action. Visitors who aren't signed in get no user directory, so this copy is what they see.
-- `body` (text, required, `maxLength` 1000)
+- `parentId` (comment id, optional, `immutable`): empty = top-level comment. Set = a reply, always to a top-level comment. Replies go one level deep only: you can reply to a reply, but the new reply joins the same top-level comment.
+- `replyToId` (comment id, optional, `immutable`): for a reply to a reply, the reply it answers, shown as "replying to …".
+- `byAuthor` (`boolean`, `default: false`, `immutable`): written by the experience's author. Shown as **"Owner"** with no name. These comments are created with the owner tools, so their `createdBy` is the app owner and can't be matched to the author's other, named comments. The author edits or deletes them through `updateAuthorComment`.
+- `authorName` (text): copied from the commenter's `users` row by the action (not set on Owner comments). Visitors who aren't signed in get no user directory, so this copy is what they see.
+- `body` (text, `maxLength` 1000). Not `required`, because a soft-deleted comment has an empty body; `postComment` checks 1–1,000 characters.
 - `deleted` (`boolean`, `default: false`): a deleted comment shows "\[deleted\]" so its replies still make sense. Soft delete also sets `body` to `""`.
 - "Edited" label: show it when `updatedAt` is later than `createdAt`. No separate field is needed.
 
@@ -170,7 +172,7 @@ Who:
 | experienceAuthors | member and admin: `own` only | action only | nobody | action only |
 | comments | everyone | action only (`postComment`) | member: `own`, `writableFields: body, deleted`. admin: all | admin (the `deleteExperience` cascade) |
 | helpfulVotes | member: `own`. admin: all | action only | nobody | action only |
-| bookmarks | member: `own` | member | nobody | member: `own` |
+| bookmarks | member: `own`. admin: all | member, admin | nobody | member: `own`. admin: all |
 | users | scaffold rules (`own`, admin all), plus `roster: 'read-policy'` |  |  |  |
 | settings | unchanged from the scaffold (admin only) |  |  |  |
 
@@ -198,7 +200,7 @@ uniqueOn: ['experienceId'],
 permissions: {
   viewer: { read: false, create: false, update: false, delete: false },
   member: { read: 'own', create: true, update: false, delete: 'own' },
-  admin:  { read: true, create: false, update: false, delete: true },
+  admin:  { read: true, create: true, update: false, delete: true }, // the app owner is an admin and bookmarks too
 },
 uniqueOn: ['experienceId', 'userId'],
 ```
@@ -228,7 +230,8 @@ Remember: **record permissions are OFF inside actions** (`X-App-Action: 'true'`)
 | `updateExperience` | Edits an experience's details, with the owner tools. Sets `authorName` from the user's `users` row when "Show my name" is on, and clears it when it's off. | An `experienceAuthors` row exists with this `experienceId` and `createdBy` = this user. Only accepts content fields and the anonymity choice, never `companyId`, `positionId`, `helpfulCount`, `commentCount` or `authorName` sent from the browser. Fields pass validation. |
 | `deleteExperience` | Deletes the experience (owner tools), then its author row, votes, bookmarks and comments with `deleteWhere({ experienceId })`. Repeats each until fewer than the limit are deleted. | The user is the author **or** an admin. Every `deleteWhere` must be scoped to this `experienceId`. |
 | `toggleHelpful` | Looks for this user's vote. Removes it if found, creates one if not. Then **recounts** the experience's votes and writes `helpfulCount`. | Signed in. Experience exists. The user isn't its author (check `experienceAuthors`). A "Duplicate" error from `uniqueOn` means a vote already exists, so treat it as success. Recounting must page through results (`offset`/`nextOffset`), because a query returns 50 records by default. |
-| `postComment` | Creates the comment as the caller, with `authorName` from their `users` row. Then **recounts** `commentCount`. Later: creates a notification. | Signed in. Experience exists. `body` is 1–1,000 characters. If `parentId` is set, that comment exists, belongs to the same experience and has no `parentId` itself (no reply chains). |
+| `postComment` | Creates the comment as the caller, with `authorName` from their `users` row. If the caller wrote the experience, creates it **with the owner tools** instead, with `byAuthor: true` and no name, so it shows as "Owner". A reply to a reply is stored under the same top-level comment, with `replyToId` set to the reply it answers. Then **recounts** `commentCount`. Later: creates a notification. | Signed in. Experience exists. `body` is 1–1,000 characters. If `parentId` is set, that comment exists, belongs to the same experience and isn't deleted. Never logs the caller. |
+| `updateAuthorComment` | Edits or soft-deletes an "Owner" comment, with the owner tools. | The comment has `byAuthor` and the caller has the `experienceAuthors` row for its experience. Never logs the caller. |
 | `setCompanyVerified` | Sets `verified` to true or false and sets `verifiedBy` to the admin's ID. `verifiedAt` is stamped by `timestampTrigger`. | The user is an admin (`resolveAppRole`). |
 | `seedSampleData` | Adds the sample companies, positions and 10 sample experiences (every outcome), skipping any that already exist. Sample experiences are written as the owner with fixed ids and **no author row**, so nobody can edit them and admins can delete them. | The user is an admin. Every sample name starts with Example, Sample, Demo or Placeholder. |
 | `deleteCompany` | Deletes a company and its positions (`deleteWhere({ companyId })`). | The user is an admin. **Refuses** if any experience has this `companyId` (query with `limit: 1`), and says how to resolve it: delete or move those experiences first. |
@@ -336,8 +339,8 @@ Do one step at a time, and test each before moving on.
 - [ ] owner-identity tools in `action-routes.ts`, then experiences + experienceAuthors + `createExperience`, anonymous by default. Check `createdBy` in DevTools.
 - [ ] experiences list with filters, company and position pages
 - [ ] `updateExperience` / `deleteExperience`, tested with a second account
-- [ ] comments + replies + `postComment`
-- [ ] helpfulVotes + `toggleHelpful`, bookmarks
+- [x] comments + replies + `postComment`
+- [x] helpfulVotes + `toggleHelpful`, bookmarks
 - [ ] `setCompanyVerified`, `deleteCompany`
 - [ ] Playwright tests: signed out, member, other member, admin
 - [ ] Stretch: discussions, notifications

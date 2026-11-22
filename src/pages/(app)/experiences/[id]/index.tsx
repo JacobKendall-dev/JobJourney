@@ -5,26 +5,39 @@
  * folder would become the parent route of `[id]/edit`, and the edit URL would
  * render this page instead.
  *
- * Read-only for now. Helpful, bookmark, comments and the author's
- * Edit / Delete arrive in the "Experience detail" step.
+ * Helpful goes through `toggleHelpful`, comments through `postComment`;
+ * bookmarks and comment edits are direct writes. The author's Edit / Delete
+ * arrive with the "Edit, My posts, Bookmarks" step.
  */
 
 import { Link, useParams } from 'react-router-dom'
+import { useQuery } from 'deepspace'
 import { FileQuestion } from 'lucide-react'
+import { BookmarkButton } from '@/components/BookmarkButton'
+import { CommentThread } from '@/components/CommentThread'
 import { EmptyState } from '@/components/EmptyState'
+import { HelpfulButton } from '@/components/HelpfulButton'
 import { ExperienceCardSkeleton } from '@/components/ExperienceCard'
 import { OutcomeBadge } from '@/components/OutcomeBadge'
 import { PageShell } from '@/components/PageShell'
 import { VerifiedBadge } from '@/components/VerifiedBadge'
 import { useExperiences } from '@/hooks/useExperiences'
+import { useRole } from '@/hooks/useRole'
 import { useLookups } from '@/hooks/useLookups'
 import { bylineText, firstResponseText, formatMonth, stagesText } from '@/lib/experience'
 import { INTERVIEW_FORMATS, LABELS, LEVELS, WORK_ARRANGEMENTS, isOneOf, labelFor } from '@/lib/options'
+import type { ExperienceAuthor } from '@/schemas/experience-authors-schema'
 
 export default function ExperienceDetailPage() {
   const { id = '' } = useParams()
   const { experiences, status } = useExperiences()
   const { companyById, positionById } = useLookups()
+  const auth = useRole()
+  const userId = auth.userId
+  // Your own author row, if you wrote this. Only its author can read it, and
+  // signed-out visitors get nothing back.
+  const { records: authorRows } = useQuery<ExperienceAuthor>('experienceAuthors', { where: { experienceId: id } })
+  const isAuthor = !!userId && authorRows.some((r) => r.createdBy === userId)
 
   if (status === 'loading') {
     return (
@@ -120,10 +133,23 @@ export default function ExperienceDetailPage() {
         </section>
       )}
 
-      <p className="text-xs text-muted-foreground">
-        {e.helpfulCount ?? 0} helpful · {e.commentCount ?? 0} comments · Helpful votes and comments arrive in the
-        “Experience detail” step.
-      </p>
+      <div className="flex flex-wrap items-center gap-2" aria-label="Actions" role="group">
+        {auth.ready ? (
+          <>
+            <HelpfulButton experienceId={id} count={e.helpfulCount ?? 0} userId={userId} isAuthor={isAuthor} />
+            <BookmarkButton experienceId={id} userId={userId} />
+            {isAuthor && <span className="text-xs text-muted-foreground">This is your post.</span>}
+          </>
+        ) : (
+          <div className="h-8 w-48 animate-pulse rounded-md bg-muted" aria-hidden />
+        )}
+      </div>
+
+      <CommentThread
+        experienceId={id}
+        userId={auth.ready ? userId : null}
+        isAuthor={isAuthor}
+      />
     </PageShell>
   )
 }

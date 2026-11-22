@@ -89,7 +89,8 @@ Generouted file names: `(app)` and `(protected)` are groups and don't appear in 
   - **Edit / Delete** only if you're the author. Query `experienceAuthors` with `where: { experienceId, createdBy: user.id }`. Everyone, admins included, can only read their own rows, so a row comes back only for the author. Delete asks for confirmation, then `deleteExperience`.
   - **Delete** for admins (moderation), same action, shown based on the user's role.
 - **Comments:**
-  - Top-level comments with one level of replies.
+  - Top-level comments with one level of replies. You can reply to a comment or to a reply; both land in the same thread, and a reply to a reply shows "replying to …".
+  - The experience's author shows as **Owner** in its comments.
   - Each shows `authorName`, "edited" if `updatedAt > createdAt`, and "\[deleted\]" for soft-deleted ones.
   - Comment box (signed in) → `postComment`.
   - Your own comments get **Edit** and **Delete** (soft delete: `deleted: true`, `body: ""`).
@@ -252,7 +253,7 @@ Flows 3 and 4 show off DeepSpace's realtime sync, so they're good for the demo a
 - [ ] Companies list + Company profile (with seed data)
 - [ ] Share form + `createExperience`
 - [ ] Browse with filters
-- [ ] Experience detail: helpful, bookmark, comments
+- [x] Experience detail: helpful, bookmark, comments
 - [ ] Edit, My posts, Bookmarks
 - [ ] Admin, including `deleteCompany`
 - [ ] Loading, empty and mobile states pass

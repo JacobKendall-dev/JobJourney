@@ -66,6 +66,9 @@ export function AddCompanyForm({ initialName = '', onCreated, onCancel }: AddCom
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
+    // When opened in a modal from the share form, React would otherwise pass
+    // this submit up to the share form (portals keep the React tree).
+    event.stopPropagation()
     const result = validateNewCompany(input)
     if (!result.ok) {
       setErrors(result.errors)

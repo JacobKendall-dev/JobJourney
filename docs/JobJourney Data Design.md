@@ -216,7 +216,9 @@ uniqueOn: ['experienceId', 'userId'],
 
 Remember: **record permissions are OFF inside actions** (`X-App-Action: 'true'`). Each check below has to be written into the action itself. When Claude Code writes one, confirm the check is there.
 
-**Two identities.** An action's normal `tools` act as the caller, so anything it creates has `createdBy` = caller. Experiences need a second set of tools that act as `env.OWNER_USER_ID`, which is the same pattern `src/server/realtime-routes.ts` uses. That set must be added to `src/server/action-routes.ts`, for example as `ownerTools` next to `tools`. Use it for **every** write to `experiences`, and the normal `tools` for everything else.
+**Two identities.** An action's normal `tools` act as the caller, so anything it creates has `createdBy` = caller. Experiences need a second set of tools that act as `env.OWNER_USER_ID`, which is the same pattern `src/server/realtime-routes.ts` uses. They live in `src/server/record-tools.ts` as `createOwnerRecordTools(env)`, next to `createRecordTools`, which the normal `tools` use. Use the owner tools for **every** write to `experiences`, and the normal `tools` for everything else. If `OWNER_USER_ID` is missing, the action refuses rather than falling back to the caller's tools.
+
+**Logs.** The action route logs each call's caller, except for `createExperience` and `updateExperience`, whose caller is the private fact. Those log `caller=[private]`, so the app's logs never tie a person to a post.
 
 **Admin checks** use `resolveAppRole(env, userId) === 'admin'` (from `deepspace/worker`, the same check `worker.ts` uses for jobs). Never trust a role sent from the browser.
 
@@ -228,7 +230,7 @@ Remember: **record permissions are OFF inside actions** (`X-App-Action: 'true'`)
 | `toggleHelpful` | Looks for this user's vote. Removes it if found, creates one if not. Then **recounts** the experience's votes and writes `helpfulCount`. | Signed in. Experience exists. The user isn't its author (check `experienceAuthors`). A "Duplicate" error from `uniqueOn` means a vote already exists, so treat it as success. Recounting must page through results (`offset`/`nextOffset`), because a query returns 50 records by default. |
 | `postComment` | Creates the comment as the caller, with `authorName` from their `users` row. Then **recounts** `commentCount`. Later: creates a notification. | Signed in. Experience exists. `body` is 1–1,000 characters. If `parentId` is set, that comment exists, belongs to the same experience and has no `parentId` itself (no reply chains). |
 | `setCompanyVerified` | Sets `verified` to true or false and sets `verifiedBy` to the admin's ID. `verifiedAt` is stamped by `timestampTrigger`. | The user is an admin (`resolveAppRole`). |
-| `seedSampleData` | Adds the sample companies and positions, skipping any that already exist. Sample experiences come later, through `createExperience`. | The user is an admin. Every sample name starts with Example, Sample, Demo or Placeholder. |
+| `seedSampleData` | Adds the sample companies, positions and 10 sample experiences (every outcome), skipping any that already exist. Sample experiences are written as the owner with fixed ids and **no author row**, so nobody can edit them and admins can delete them. | The user is an admin. Every sample name starts with Example, Sample, Demo or Placeholder. |
 | `deleteCompany` | Deletes a company and its positions (`deleteWhere({ companyId })`). | The user is an admin. **Refuses** if any experience has this `companyId` (query with `limit: 1`), and says how to resolve it: delete or move those experiences first. |
 
 Not actions (handled by permission rules): creating a company or position, editing or soft-deleting your own comment (the UI sets `deleted: true` and `body: ""` together), and bookmarks.

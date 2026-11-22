@@ -41,19 +41,21 @@ function SampleDataCard() {
       companiesCreated: number
       companiesUpdated: number
       positionsCreated: number
+      experiencesCreated: number
     }>('seedSampleData')
     setLoading(false)
     if (!result.success) {
       error("Couldn't load sample data", result.error)
       return
     }
-    const { companiesCreated, companiesUpdated, positionsCreated } = result.data
-    if (companiesCreated === 0 && companiesUpdated === 0 && positionsCreated === 0) {
+    const { companiesCreated, companiesUpdated, positionsCreated, experiencesCreated } = result.data
+    if (companiesCreated + companiesUpdated + positionsCreated + experiencesCreated === 0) {
       success('Sample data is already loaded')
     } else {
       const parts = [
         companiesCreated > 0 && `added ${companiesCreated} companies`,
         positionsCreated > 0 && `added ${positionsCreated} positions`,
+        experiencesCreated > 0 && `added ${experiencesCreated} experiences`,
         companiesUpdated > 0 && `updated ${companiesUpdated} companies`,
       ].filter(Boolean)
       const summary = parts.join(', ')
@@ -66,7 +68,8 @@ function SampleDataCard() {
       <h2 className="text-base font-semibold text-foreground">Sample data</h2>
       <p className="mt-1 max-w-prose text-sm text-muted-foreground">
         Adds five clearly-labelled sample companies (Example, Sample, Demo, Placeholder) with two or
-        three positions each. Safe to run more than once: anything already there is skipped.
+        three positions each, and ten sample experiences covering every outcome. Safe to run more
+        than once: anything already there is skipped.
       </p>
       <Button className="mt-3" onClick={loadSampleData} loading={loading}>
         <Database aria-hidden />

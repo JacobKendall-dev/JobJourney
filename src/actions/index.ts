@@ -8,10 +8,12 @@
 import type { ActionHandler } from 'deepspace/worker'
 import type { Env } from '../../worker'
 import { deleteCompany, setCompanyVerified } from './companies'
+import { createExperience } from './experiences'
 import { seedSampleData } from './sample-data'
 
 export const actions: Record<string, ActionHandler<Env>> = {
   setCompanyVerified,
   deleteCompany,
   seedSampleData,
+  createExperience,
 }

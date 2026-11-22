@@ -17,6 +17,7 @@ import {
 import { schemas } from '../schemas'
 import { companiesSchema } from './companies-schema'
 import { experiencesSchema } from './experiences-schema'
+import { experienceAuthorsSchema } from './experience-authors-schema'
 import { positionsSchema } from './positions-schema'
 import { usersSchema } from './users-schema'
 
@@ -37,6 +38,19 @@ const newCompany = {
 describe('schema set', () => {
   it('has no schema lint warnings', () => {
     expect(lintSchemas(schemas)).toEqual([])
+  })
+
+  // The SDK checks maxLength against the raw value before JSON or number
+  // conversion and refuses anything that isn't a string, so maxLength on any
+  // other column makes every write to it fail.
+  it('puts maxLength only on plain text columns', () => {
+    for (const schema of schemas) {
+      for (const column of schema.columns) {
+        if (column.maxLength === undefined) continue
+        const kind = typeof column.interpretation === 'string' ? column.interpretation : column.interpretation.kind
+        expect(`${schema.name}.${column.name}: ${column.storage} ${kind}`).toMatch(/: text (plain|url|email)$/)
+      }
+    }
   })
 })
 
@@ -120,6 +134,29 @@ describe('experiences', () => {
   it('company and position can never change', () => {
     const immutable = experiencesSchema.columns.filter((c) => c.immutable).map((c) => c.name)
     expect(immutable).toEqual(['companyId', 'positionId'])
+  })
+})
+
+describe('experienceAuthors', () => {
+  it('only the author can read their row — not visitors, other members, or admins', () => {
+    const mine = record('me', { experienceId: 'e1' })
+    expect(canRead(experienceAuthorsSchema, 'member', mine, 'me', noopPermissionContext)).toBe(true)
+    expect(canRead(experienceAuthorsSchema, 'admin', mine, 'me', noopPermissionContext)).toBe(true)
+    expect(canRead(experienceAuthorsSchema, 'member', mine, 'someone-else', noopPermissionContext)).toBe(false)
+    expect(canRead(experienceAuthorsSchema, 'admin', mine, 'an-admin', noopPermissionContext)).toBe(false)
+    expect(canRead(experienceAuthorsSchema, 'viewer', mine, 'anon-1', noopPermissionContext)).toBe(false)
+  })
+
+  it('nobody writes it directly — only actions', () => {
+    for (const role of ['viewer', 'member', 'admin']) {
+      expect(canCreate(experienceAuthorsSchema, role)).toBe(false)
+      expect(canUpdate(experienceAuthorsSchema, role, record('me'), 'me', noopPermissionContext)).toBe(false)
+      expect(canDelete(experienceAuthorsSchema, role, record('me'), 'me', noopPermissionContext)).toBe(false)
+    }
+  })
+
+  it('one author row per experience', () => {
+    expect(experienceAuthorsSchema.uniqueOn).toEqual(['experienceId'])
   })
 })
 

@@ -26,7 +26,10 @@ export const experiencesSchema: CollectionSchema = {
     { name: 'firstResponseDays', storage: 'number', interpretation: 'plain' },
     { name: 'noResponse', storage: 'number', interpretation: { kind: 'boolean' }, default: false },
     { name: 'interviewStages', storage: 'number', interpretation: 'plain', default: 0 },
-    { name: 'interviewFormats', storage: 'text', interpretation: { kind: 'json' }, maxLength: 500 },
+    // No maxLength here: the SDK checks maxLength before turning JSON into
+    // text, so any array fails it. Actions cap the list instead (at most the
+    // six known formats, no repeats).
+    { name: 'interviewFormats', storage: 'text', interpretation: { kind: 'json' } },
     {
       name: 'outcome',
       storage: 'text',

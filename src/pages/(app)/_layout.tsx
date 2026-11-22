@@ -33,7 +33,10 @@ export default function AppLayout() {
       <AuthBoot>
         <div className="flex h-screen flex-col bg-background overflow-hidden">
           <Navigation />
-          <main className="flex-1 overflow-y-auto min-h-0">
+          {/* `relative` keeps absolutely-positioned descendants (sr-only inputs,
+              stretched links) inside this scroll area. Without it they're placed
+              against the page and can make the page itself scroll: a second scrollbar. */}
+          <main className="relative flex-1 overflow-y-auto min-h-0">
             <Suspense fallback={<div className="flex items-center justify-center h-full text-muted-foreground">Loading...</div>}>
               <Outlet />
             </Suspense>

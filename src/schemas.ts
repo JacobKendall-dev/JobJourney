@@ -13,6 +13,7 @@ import { settingsSchema } from './schemas/admin-schema'
 import { companiesSchema } from './schemas/companies-schema'
 import { positionsSchema } from './schemas/positions-schema'
 import { experiencesSchema } from './schemas/experiences-schema'
+import { experienceAuthorsSchema } from './schemas/experience-authors-schema'
 
 export const schemas: CollectionSchema[] = [
   usersSchema,
@@ -20,4 +21,5 @@ export const schemas: CollectionSchema[] = [
   companiesSchema,
   positionsSchema,
   experiencesSchema,
+  experienceAuthorsSchema,
 ]

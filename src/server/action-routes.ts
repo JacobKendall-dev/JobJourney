@@ -37,9 +37,16 @@ import {
 import type { ActionResult, ActionTools, VerifyResult } from 'deepspace/worker'
 import { actions } from '../actions/index.js'
 import { integrations } from '../integrations.js'
+import { createRecordTools } from './record-tools.js'
 import type { AppContext, Env } from '../../worker.js'
 
 type ResolveAuth = (req: Request, env: Env) => Promise<VerifyResult | null>
+
+/**
+ * Actions whose caller is the author of an anonymous post. Their log line
+ * omits the caller, so the app's logs never tie a person to a post.
+ */
+const AUTHOR_PRIVATE_ACTIONS = new Set(['createExperience', 'updateExperience'])
 
 export function registerActionRoutes(app: Hono<AppContext>, resolveAuth: ResolveAuth): void {
   app.post('/api/actions/:name', async (c) => {
@@ -55,9 +62,12 @@ export function registerActionRoutes(app: Hono<AppContext>, resolveAuth: Resolve
     if (!callerJwt) return c.json({ error: 'Unauthorized' }, 401)
     // Who called: actions run RBAC-off and can bill the owner, and the
     // platform's request log carries no user — this line is the attribution.
+    // Except for actions whose caller IS the private fact: logging who called
+    // createExperience would put authorship of anonymous posts in the logs.
     // The name is a decoded path segment, so it is quoted, never interpolated raw.
-    console.info(`[action] ${JSON.stringify(c.req.param('name'))} caller=${auth.userId}`)
     const name = c.req.param('name')
+    const caller = AUTHOR_PRIVATE_ACTIONS.has(name) ? '[private]' : auth.userId
+    console.info(`[action] ${JSON.stringify(name)} caller=${caller}`)
     // Own keys only: `actions[name]` also finds `constructor` (Object), which
     // returns the handler argument, env secrets included, as the response.
     const action = lookupOwn(actions, name)
@@ -70,27 +80,9 @@ export function registerActionRoutes(app: Hono<AppContext>, resolveAuth: Resolve
 }
 
 function createActionTools(env: Env, userId: string, callerJwt: string): ActionTools {
-  const stub = env.RECORD_ROOMS.get(env.RECORD_ROOMS.idFromName(`app:${env.DEEPSPACE_APP_ID}`))
-
-  // The DO returns ActionResult<unknown>; callers below supply the precise
-  // operation result type fixed by the SDK tools-api wire contract.
-  async function execTool<TData>(
-    tool: string,
-    params: Record<string, unknown>,
-  ): Promise<ActionResult<TData>> {
-    const res = await stub.fetch(
-      new Request('https://internal/api/tools/execute', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-User-Id': userId,
-          'X-App-Action': 'true',
-        },
-        body: JSON.stringify({ tool, params }),
-      }),
-    )
-    return res.json() as Promise<ActionResult<TData>>
-  }
+  // Record tools act as the caller. For writes that must not reveal the
+  // caller (experiences), actions use createOwnerRecordTools instead.
+  const recordTools = createRecordTools(env, userId)
 
   async function callIntegration<T>(endpoint: string, data?: unknown): Promise<ActionResult<T>> {
     // "name/endpoint", both plain identifiers: anything else could reach
@@ -135,17 +127,5 @@ function createActionTools(env: Env, userId: string, callerJwt: string): ActionT
     return payload as ActionResult<T>
   }
 
-  return {
-    create: (collection, data, recordId) =>
-      execTool('records.create', { collection, data, recordId }),
-    update: (collection, recordId, data) =>
-      execTool('records.update', { collection, recordId, data }),
-    remove: (collection, recordId) => execTool('records.delete', { collection, recordId }),
-    deleteWhere: (collection, where, limit) =>
-      execTool('records.deleteWhere', { collection, where, limit }),
-    get: (collection, recordId) => execTool('records.get', { collection, recordId }),
-    query: (collection, options) => execTool('records.query', { collection, ...options }),
-    integration: callIntegration,
-    registerUser: (options) => execTool('users.register', { ...options }),
-  }
+  return { ...recordTools, integration: callIntegration }
 }

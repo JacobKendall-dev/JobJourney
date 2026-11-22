@@ -11,8 +11,12 @@ import type { Env } from '../../worker'
 const resolveAppRole = vi.fn<(env: unknown, userId: string) => Promise<string>>()
 vi.mock('deepspace/worker', () => ({ resolveAppRole: (env: unknown, id: string) => resolveAppRole(env, id) }))
 
+/** Owner-identity tools used by the seed for sample experiences. */
+const ownerTools = { get: vi.fn(), create: vi.fn() }
+vi.mock('../server/record-tools', () => ({ createOwnerRecordTools: () => ownerTools }))
+
 const { deleteCompany, setCompanyVerified } = await import('./companies')
-const { seedSampleData, SAMPLE_COMPANIES } = await import('./sample-data')
+const { seedSampleData, SAMPLE_COMPANIES, SAMPLE_EXPERIENCES } = await import('./sample-data')
 
 const ok = <T,>(data: T) => ({ success: true as const, data })
 const fail = (error: string) => ({ success: false as const, error })
@@ -42,6 +46,8 @@ const ctx = (tools: ActionTools, params: Record<string, unknown> = {}): ActionCo
 beforeEach(() => {
   resolveAppRole.mockReset()
   resolveAppRole.mockResolvedValue('admin')
+  ownerTools.get.mockReset().mockResolvedValue(fail('not found'))
+  ownerTools.create.mockReset().mockResolvedValue(ok({ recordId: 'sample' }))
 })
 
 describe('setCompanyVerified', () => {
@@ -129,8 +135,60 @@ describe('seedSampleData', () => {
     const positions = SAMPLE_COMPANIES.reduce((n, c) => n + c.positions.length, 0)
     expect(await seedSampleData(ctx(tools))).toEqual({
       success: true,
-      data: { companiesCreated: SAMPLE_COMPANIES.length, companiesUpdated: 0, positionsCreated: positions },
+      // No positions come back from the fake query, so no experiences can be placed.
+      data: { companiesCreated: SAMPLE_COMPANIES.length, companiesUpdated: 0, positionsCreated: positions, experiencesCreated: 0 },
     })
+  })
+
+  it('adds sample experiences as the owner, with fixed ids and no author rows', async () => {
+    const query = vi.fn((collection: string, options: { where: Record<string, string> }) => {
+      if (collection === 'companies') return Promise.resolve(ok({ records: [], count: 0 }))
+      // positions: return every sample title for this company, with a stable id
+      const company = SAMPLE_COMPANIES.find((_, i) => options.where.companyId === `company-${i}`)
+      const records = (company?.positions ?? []).map((p) => ({ recordId: `${options.where.companyId}:${p.title}`, data: { title: p.title } }))
+      return Promise.resolve(ok({ records, count: records.length }))
+    })
+    let n = 0
+    const create = vi.fn((collection: string) =>
+      Promise.resolve(ok({ recordId: collection === 'companies' ? `company-${n++}` : 'position' })),
+    )
+    const tools = makeTools({ query, create })
+
+    const result = await seedSampleData(ctx(tools))
+    expect(result).toMatchObject({ success: true, data: { experiencesCreated: SAMPLE_EXPERIENCES.length } })
+    // Experiences only through the owner tools; the caller's tools never write one or an author row.
+    expect(create.mock.calls.map(([c]) => c)).not.toContain('experiences')
+    expect(create.mock.calls.map(([c]) => c)).not.toContain('experienceAuthors')
+    expect(ownerTools.create).toHaveBeenCalledTimes(SAMPLE_EXPERIENCES.length)
+    const [collection, data, id] = ownerTools.create.mock.calls[0]
+    expect(collection).toBe('experiences')
+    expect(id).toBe('sample-exp-01')
+    expect(data).toMatchObject({ companyId: 'company-0', helpfulCount: 0, commentCount: 0 })
+    expect(data).not.toHaveProperty('companySlug')
+  })
+
+  it('skips sample experiences that already exist', async () => {
+    ownerTools.get.mockResolvedValue(ok({ record: { recordId: 'sample-exp-01' } }))
+    const query = vi.fn((collection: string) =>
+      Promise.resolve(
+        ok({
+          records: collection === 'positions' ? SAMPLE_COMPANIES.flatMap((c) => c.positions.map((p) => ({ recordId: 'p', data: { title: p.title } }))) : [],
+          count: 0,
+        }),
+      ),
+    )
+    const result = await seedSampleData(ctx(makeTools({ query })))
+    expect(result).toMatchObject({ data: { experiencesCreated: 0 } })
+    expect(ownerTools.create).not.toHaveBeenCalled()
+  })
+
+  it('every sample experience is marked as a sample and covers every outcome', () => {
+    for (const e of SAMPLE_EXPERIENCES) {
+      expect(`${e.interviewExperience ?? ''}${e.advice ?? ''}`).toMatch(/^Sample post:|Sample post:/)
+    }
+    expect(new Set(SAMPLE_EXPERIENCES.map((e) => e.outcome))).toEqual(
+      new Set(['offer', 'rejected', 'ghosted', 'withdrew', 'in_progress']),
+    )
   })
 
   it('skips companies and positions that already exist', async () => {
@@ -142,7 +200,7 @@ describe('seedSampleData', () => {
       query,
       create: vi.fn().mockResolvedValue(fail('Duplicate: a record with companyId=existing already exists')),
     })
-    expect(await seedSampleData(ctx(tools))).toEqual({
+    expect(await seedSampleData(ctx(tools))).toMatchObject({
       success: true,
       data: { companiesCreated: 0, companiesUpdated: 0, positionsCreated: 0 },
     })

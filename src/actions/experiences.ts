@@ -27,7 +27,7 @@ export async function isExperienceAuthor(tools: ActionTools, experienceId: strin
 
 const AUTHOR_NAME_MAX = 100
 
-type OwnerTools = NonNullable<ReturnType<typeof createOwnerRecordTools>>
+export type OwnerTools = NonNullable<ReturnType<typeof createOwnerRecordTools>>
 type Added = { companyId?: string; positionId?: string }
 type PlaceResult =
   | { ok: true; companyId: string; positionId: string; added: Added }
@@ -230,6 +230,33 @@ const CASCADE = ['helpfulVotes', 'bookmarks', 'comments', 'experienceAuthors'] a
 const CASCADE_BATCH = 500
 
 /**
+ * Remove an experience (with the owner tools), then its votes, bookmarks,
+ * comments and author row. Runs even if the experience is already gone, so a
+ * half-finished earlier delete can be finished. The author row goes last, so
+ * the author can retry. Every deleteWhere is scoped to this id.
+ * Returns an error message, or null when everything is gone.
+ */
+export async function removeExperienceAndRows(
+  tools: ActionTools,
+  owner: OwnerTools,
+  experienceId: string,
+): Promise<string | null> {
+  const existing = await tools.get('experiences', experienceId)
+  if (existing.success) {
+    const removed = await owner.remove('experiences', experienceId)
+    if (!removed.success) return `Couldn't delete the experience: ${removed.error}`
+  }
+  for (const collection of CASCADE) {
+    for (;;) {
+      const result = await tools.deleteWhere(collection, { experienceId }, CASCADE_BATCH)
+      if (!result.success) return "Deleted the experience, but couldn't finish cleaning up. Try again."
+      if (result.data.deleted < CASCADE_BATCH) break
+    }
+  }
+  return null
+}
+
+/**
  * params: { experienceId }. Deletes the experience, then its votes,
  * bookmarks, comments and private author row. Allowed for its author, or an
  * admin (moderation). Admins never learn who wrote it.
@@ -247,20 +274,8 @@ export const deleteExperience: ActionHandler<Env> = async ({ userId, params, too
   const allowed = author || (await resolveAppRole(env, userId)) === 'admin'
   if (!allowed) return refuse('Only the person who shared this experience, or an admin, can delete it.', 'forbidden')
 
-  const existing = await tools.get('experiences', experienceId)
-  if (existing.success) {
-    const removed = await owner.remove('experiences', experienceId)
-    if (!removed.success) return refuse(`Couldn't delete the experience: ${removed.error}`)
-  }
-  // Clean up even if the experience was already gone, so a half-finished
-  // earlier delete can be finished. Every deleteWhere is scoped to this id.
-  for (const collection of CASCADE) {
-    for (;;) {
-      const result = await tools.deleteWhere(collection, { experienceId }, CASCADE_BATCH)
-      if (!result.success) return refuse(`Deleted the experience, but couldn't finish cleaning up. Try again.`)
-      if (result.data.deleted < CASCADE_BATCH) break
-    }
-  }
+  const failed = await removeExperienceAndRows(tools, owner, experienceId)
+  if (failed) return refuse(failed)
 
   // Say which kind of caller, never who: the author of an anonymous post is private.
   console.info(`[action] deleteExperience experience=${experienceId} by=${author ? 'author' : 'admin'}`)

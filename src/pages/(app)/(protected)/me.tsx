@@ -25,13 +25,13 @@ export default function MyPostsPage() {
   const { userId } = useRole()
   const authorship = useMyAuthorship(userId)
   const { experiences, status, error } = useExperiences()
-  const { companyById, positionById } = useLookups()
+  const { companyById, positionById, status: lookupsStatus } = useLookups()
 
   const mine = useMemo(
     () => sortExperiences(experiences.filter((e) => authorship.experienceIds.has(e.recordId)), 'newest'),
     [experiences, authorship.experienceIds],
   )
-  const loading = !userId || status === 'loading' || authorship.status === 'loading'
+  const loading = !userId || status === 'loading' || authorship.status === 'loading' || lookupsStatus === 'loading'
 
   return (
     <PageShell

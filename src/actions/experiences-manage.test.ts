@@ -67,9 +67,10 @@ vi.mock('deepspace/worker', () => ({
 }))
 
 const { createExperience, updateExperience, deleteExperience } = await import('./experiences')
+const { deleteAccount } = await import('./account')
 
-const ctx = (userId: string, params: Record<string, unknown>) =>
-  ({ userId, params, tools: fakeTools(userId) as unknown as ActionTools, env: {} as Env, callerJwt: 'jwt' }) as ActionContext<Env>
+const ctx = (userId: string, params: Record<string, unknown>, env: Partial<Env> = {}) =>
+  ({ userId, params, tools: fakeTools(userId) as unknown as ActionTools, env: env as Env, callerJwt: 'jwt' }) as ActionContext<Env>
 
 const content = {
   appliedMonth: '2026-01',
@@ -256,5 +257,56 @@ describe('deleteExperience', () => {
     db.experiences = db.experiences.filter((e) => e.recordId !== 'e1')
     expect(await deleteExperience(ctx('sam', { experienceId: 'e1' }))).toMatchObject({ success: true })
     expect(db.comments.map((c) => c.recordId)).toEqual(['k2'])
+  })
+})
+
+describe('deleteAccount', () => {
+  beforeEach(() => {
+    db.users.push({ recordId: 'alex', createdBy: 'alex', data: { name: 'Alex Kim' } })
+    db.comments.push({
+      recordId: 'k3',
+      createdBy: 'sam',
+      data: { experienceId: 'e2', body: 'Thanks!', authorName: 'Sam Rivera' },
+    })
+    db.experiences.find((e) => e.recordId === 'e2')!.data.helpfulCount = 1
+    db.bookmarks.push({ recordId: 'b2', createdBy: 'sam', data: { experienceId: 'e2', userId: 'sam' } })
+  })
+
+  it("removes the person's posts, votes, bookmarks, name on comments and profile", async () => {
+    expect(await deleteAccount(ctx('sam', { confirm: true }))).toMatchObject({
+      success: true,
+      data: { experiencesDeleted: 1, commentsCleared: 1 },
+    })
+    // Their post and everything on it.
+    expect(db.experiences.map((e) => e.recordId)).toEqual(['e2'])
+    expect(db.comments.some((c) => c.data.experienceId === 'e1')).toBe(false)
+    // Their vote on someone else's post, with the count fixed.
+    expect(db.helpfulVotes).toHaveLength(0)
+    expect(db.experiences[0].data.helpfulCount).toBe(0)
+    expect(db.bookmarks.some((b) => b.data.userId === 'sam')).toBe(false)
+    // Their comment elsewhere stays as a nameless tombstone.
+    expect(db.comments.find((c) => c.recordId === 'k3')!.data).toEqual({ experienceId: 'e2', body: '', deleted: true })
+    expect(db.users.map((u) => u.recordId)).toEqual(['alex'])
+    // Other people's things are untouched.
+    expect(db.experienceAuthors.map((a) => a.recordId)).toEqual(['a2'])
+    expect(db.comments.find((c) => c.recordId === 'k2')!.data.body).toBe('Hi')
+  })
+
+  it('can be run again', async () => {
+    await deleteAccount(ctx('sam', { confirm: true }))
+    expect(await deleteAccount(ctx('sam', { confirm: true }))).toMatchObject({
+      success: true,
+      data: { experiencesDeleted: 0, commentsCleared: 0 },
+    })
+  })
+
+  it('needs confirmation, a signed-in account, and refuses the app owner', async () => {
+    expect(await deleteAccount(ctx('sam', {}))).toMatchObject({ code: 'invalid_params' })
+    expect(await deleteAccount(ctx('anon-1', { confirm: true }))).toMatchObject({ code: 'sign_in_required' })
+    expect(await deleteAccount(ctx('sam', { confirm: true }, { OWNER_USER_ID: 'sam' }))).toMatchObject({
+      code: 'owner_account',
+    })
+    expect(db.experiences).toHaveLength(2)
+    expect(db.users).toHaveLength(2)
   })
 })

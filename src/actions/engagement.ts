@@ -28,7 +28,7 @@ const AUTHOR_NAME_MAX = 100
 type StoredComment = { experienceId?: string; parentId?: string; byAuthor?: unknown; deleted?: unknown }
 
 /** Count matching rows and store the count on the experience. Null if either step failed. */
-async function recount(
+export async function recount(
   tools: ActionTools,
   owner: RecordTools,
   collection: 'helpfulVotes' | 'comments',

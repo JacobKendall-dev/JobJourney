@@ -23,7 +23,7 @@ export default function BookmarksPage() {
   const { userId } = useRole()
   const bookmarks = useQuery<Bookmark>('bookmarks', { where: { userId: userId ?? '__signed_out__' } })
   const { experiences, status, error } = useExperiences()
-  const { companyById, positionById } = useLookups()
+  const { companyById, positionById, status: lookupsStatus } = useLookups()
 
   const saved = useMemo(() => {
     const byId = new Map(experiences.map((e) => [e.recordId, e]))
@@ -37,7 +37,7 @@ export default function BookmarksPage() {
       })
   }, [bookmarks.records, experiences, userId])
 
-  const loading = !userId || status === 'loading' || bookmarks.status === 'loading'
+  const loading = !userId || status === 'loading' || bookmarks.status === 'loading' || lookupsStatus === 'loading'
 
   return (
     <PageShell title="Bookmarks" description="Experiences you saved.">

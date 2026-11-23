@@ -33,8 +33,8 @@ import type { ExperienceAuthor } from '@/schemas/experience-authors-schema'
 export default function ExperienceDetailPage() {
   const { id = '' } = useParams()
   const navigate = useNavigate()
-  const { experiences, status } = useExperiences()
-  const { companyById, positionById } = useLookups()
+  const { experiences, status, error } = useExperiences()
+  const { companyById, positionById, status: lookupsStatus } = useLookups()
   const auth = useRole()
   const userId = auth.userId
   // Your own author row, if you wrote this. Only its author can read it, and
@@ -42,10 +42,25 @@ export default function ExperienceDetailPage() {
   const { records: authorRows } = useQuery<ExperienceAuthor>('experienceAuthors', { where: { experienceId: id } })
   const isAuthor = !!userId && authorRows.some((r) => r.createdBy === userId)
 
-  if (status === 'loading') {
+  if (status === 'loading' || lookupsStatus === 'loading') {
     return (
       <PageShell title={<span className="inline-block h-7 w-64 animate-pulse rounded bg-muted" />}>
-        <ExperienceCardSkeleton />
+        <div aria-busy="true" aria-label="Loading the experience">
+          <ExperienceCardSkeleton />
+        </div>
+      </PageShell>
+    )
+  }
+
+  if (status === 'error') {
+    return (
+      <PageShell title="Couldn't load this experience">
+        <EmptyState
+          icon={<FileQuestion aria-hidden />}
+          title="Something went wrong loading this experience."
+          description={error ?? 'Check your connection and reload the page.'}
+          action={{ label: 'Browse experiences', to: '/experiences' }}
+        />
       </PageShell>
     )
   }

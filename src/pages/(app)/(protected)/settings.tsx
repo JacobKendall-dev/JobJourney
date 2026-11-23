@@ -1,41 +1,139 @@
 /**
- * Example gated page. Reached at /settings — no auth logic lives here
- * because (protected)/_layout.tsx already wraps the subtree in <AuthGate>.
+ * Settings — /settings. Signed in only (the (protected) layout).
+ *
+ * Your account details, sign out, and Delete account. A DeepSpace sign-in is
+ * shared across DeepSpace apps, so deleting removes everything you have in
+ * JobJourney (the deleteAccount action) and signs you out; it can't remove
+ * the sign-in itself.
  */
 
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { signOut, useUser } from 'deepspace'
-import { Button } from '@/components/ui'
+import { LogOut, Trash2 } from 'lucide-react'
+import { PageShell } from '@/components/PageShell'
+import { Button, Input, Label, Modal, useToast } from '@/components/ui'
+import { callAction } from '@/lib/actions'
+
+const CONFIRM_WORD = 'DELETE'
 
 export default function SettingsPage() {
   const { user } = useUser()
 
   return (
-    // No background on page wrappers — pages render into whatever the app's
-    // (app)/_layout provides (a plain background, or a raised panel), so they
-    // stay transparent and inherit it.
-    <div className="min-h-full text-foreground">
-      <div className="mx-auto max-w-2xl px-6 py-20">
-        <h1 className="mb-12 text-4xl font-bold tracking-tight">Settings</h1>
-
-        <section className="rounded-lg border border-border bg-card p-6">
-          <h2 className="mb-4 text-lg font-semibold">Your account</h2>
-
-          <dl className="space-y-3 text-sm">
+    <PageShell title="Settings">
+      <div className="grid max-w-2xl gap-6">
+        <section className="rounded-lg border border-border bg-card p-4">
+          <h2 className="text-base font-semibold text-foreground">Your account</h2>
+          <dl className="mt-3 grid gap-3 text-sm">
             <div>
               <dt className="text-muted-foreground">Name</dt>
-              <dd className="text-foreground">{user?.name ?? '—'}</dd>
+              <dd className="text-foreground">{user?.name || '—'}</dd>
             </div>
             <div>
               <dt className="text-muted-foreground">Email</dt>
-              <dd className="text-foreground">{user?.email ?? '—'}</dd>
+              <dd className="break-all text-foreground">{user?.email || '—'}</dd>
             </div>
           </dl>
-
-          <Button variant="secondary" className="mt-6" onClick={() => signOut()}>
+          <Button variant="secondary" className="mt-4" onClick={() => signOut()}>
+            <LogOut aria-hidden />
             Sign out
           </Button>
         </section>
+
+        <DeleteAccountSection />
       </div>
-    </div>
+    </PageShell>
+  )
+}
+
+function DeleteAccountSection() {
+  const navigate = useNavigate()
+  const { error } = useToast()
+  const [open, setOpen] = useState(false)
+  const [typed, setTyped] = useState('')
+  const [pending, setPending] = useState(false)
+  const confirmed = typed.trim().toUpperCase() === CONFIRM_WORD
+
+  function close() {
+    if (pending) return
+    setOpen(false)
+    setTyped('')
+  }
+
+  async function deleteAccount() {
+    setPending(true)
+    const result = await callAction('deleteAccount', { confirm: true })
+    if (!result.success) {
+      setPending(false)
+      error("Couldn't delete your account", result.error)
+      return
+    }
+    navigate('/', { replace: true })
+    await signOut()
+  }
+
+  return (
+    <section className="rounded-lg border border-destructive/40 bg-card p-4" aria-labelledby="delete-account-title">
+      <h2 id="delete-account-title" className="text-base font-semibold text-foreground">
+        Delete account
+      </h2>
+      <p className="mt-1 max-w-prose text-sm text-muted-foreground">
+        Permanently removes everything you have in JobJourney: your experiences (with their votes, comments and
+        bookmarks), your helpful votes, your bookmarks and your profile. Your comments on other posts show as
+        “[deleted]” so replies still make sense. This can't be undone.
+      </p>
+      <Button variant="destructive" className="mt-4" onClick={() => setOpen(true)}>
+        <Trash2 aria-hidden />
+        Delete account
+      </Button>
+
+      <Modal open={open} onClose={close} size="sm">
+        <Modal.Header>
+          <Modal.Title>Delete your account?</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <form
+            id="delete-account-form"
+            className="grid gap-3"
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (confirmed && !pending) void deleteAccount()
+            }}
+          >
+            <p className="text-sm text-muted-foreground">
+              Everything you have in JobJourney is deleted and you're signed out. Your DeepSpace sign-in itself stays,
+              because it's shared with other DeepSpace apps; signing in again starts an empty profile.
+            </p>
+            <div className="grid gap-1.5">
+              <Label htmlFor="delete-confirm">Type {CONFIRM_WORD} to confirm</Label>
+              <Input
+                id="delete-confirm"
+                value={typed}
+                autoComplete="off"
+                autoCapitalize="characters"
+                onChange={(e) => setTyped(e.target.value)}
+                disabled={pending}
+                autoFocus
+              />
+            </div>
+          </form>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="ghost" onClick={close} disabled={pending}>
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            form="delete-account-form"
+            variant="destructive"
+            disabled={!confirmed}
+            loading={pending}
+          >
+            Delete my account
+          </Button>
+        </Modal.Footer>
+      </Modal>
+    </section>
   )
 }

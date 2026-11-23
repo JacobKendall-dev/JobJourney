@@ -30,7 +30,16 @@ const PAGE = 10
 export default function AdminPage() {
   const { ready, isAdmin } = useRole()
 
-  if (!ready) return null
+  if (!ready) {
+    return (
+      <PageShell title="Admin">
+        <div className="grid gap-3" aria-busy="true" aria-label="Checking your access">
+          <ExperienceCardSkeleton />
+          <ExperienceCardSkeleton />
+        </div>
+      </PageShell>
+    )
+  }
 
   if (!isAdmin) {
     return <PageShell title="Admins only" description="You don't have access to this page." />

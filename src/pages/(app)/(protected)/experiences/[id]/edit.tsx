@@ -14,6 +14,7 @@ import { PageShell } from '@/components/PageShell'
 import { ExperienceForm, formFromExperience } from '@/components/share/ExperienceForm'
 import { useToast } from '@/components/ui'
 import { useExperiences } from '@/hooks/useExperiences'
+import { useLookups } from '@/hooks/useLookups'
 import { useMyAuthorship } from '@/hooks/useMyAuthorship'
 import { useRole } from '@/hooks/useRole'
 import { callAction } from '@/lib/actions'
@@ -23,14 +24,30 @@ export default function EditExperiencePage() {
   const navigate = useNavigate()
   const { success } = useToast()
   const { userId } = useRole()
-  const { experiences, status } = useExperiences()
+  const { experiences, status, error } = useExperiences()
+  const lookups = useLookups()
   const authorship = useMyAuthorship(userId)
   const detailUrl = `/experiences/${encodeURIComponent(id)}`
 
-  if (status === 'loading' || authorship.status === 'loading' || !userId) {
+  if (status === 'loading' || authorship.status === 'loading' || lookups.status === 'loading' || !userId) {
     return (
       <PageShell title="Edit your experience">
-        <ExperienceCardSkeleton />
+        <div aria-busy="true" aria-label="Loading the experience">
+          <ExperienceCardSkeleton />
+        </div>
+      </PageShell>
+    )
+  }
+
+  if (status === 'error' || authorship.status === 'error') {
+    return (
+      <PageShell title="Edit your experience">
+        <EmptyState
+          icon={<FileQuestion aria-hidden />}
+          title="Couldn't load this experience."
+          description={error ?? authorship.error ?? 'Check your connection and reload the page.'}
+          action={{ label: 'Your posts', to: '/me' }}
+        />
       </PageShell>
     )
   }

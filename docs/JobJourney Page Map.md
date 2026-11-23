@@ -36,6 +36,7 @@ Generouted file names: `(app)` and `(protected)` are groups and don't appear in 
 | Company profile | `/companies/:slug` | `(app)/companies/[slug].tsx` | everyone; admin buttons for admins |
 | My bookmarks | `/bookmarks` | `(app)/(protected)/bookmarks.tsx` | signed in |
 | My posts | `/me` | `(app)/(protected)/me.tsx` | signed in |
+| Settings | `/settings` | `(app)/(protected)/settings.tsx` | signed in |
 | Admin | `/admin` | `(app)/(protected)/admin.tsx` | admin only |
 | Not found | any other URL | `[...all].tsx` (static) | everyone |
 
@@ -177,6 +178,12 @@ One page, in four short sections:
 - Each shows its helpful count and comment count, so authors see their posts helping.
 - **Empty state:** "You haven't shared anything yet." plus **Share your experience**.
 
+### Settings — `/settings`
+
+- Signed in only. Your name and email, and **Sign out**.
+- **Delete account:** explains what goes, then a dialog where you type DELETE to confirm. It calls `deleteAccount`, then signs you out and goes home.
+- A DeepSpace sign-in is shared by every DeepSpace app, so the app can't delete the sign-in itself. Deleting removes everything you have in JobJourney; signing in again starts an empty profile.
+
 ### Admin — `/admin`
 
 Visible in the menu only for admins. The page checks the role, and every admin action re-checks it on the server.
@@ -256,4 +263,4 @@ Flows 3 and 4 show off DeepSpace's realtime sync, so they're good for the demo a
 - [x] Experience detail: helpful, bookmark, comments
 - [x] Edit, My posts, Bookmarks
 - [x] Admin, including `deleteCompany`
-- [ ] Loading, empty and mobile states pass
+- [x] Loading, empty and mobile states pass

@@ -50,6 +50,8 @@ const AUTHOR_PRIVATE_ACTIONS = new Set([
   'createExperience',
   'updateExperience',
   'deleteExperience',
+  // Deletes the caller's posts; the caller id next to that time would hint at which.
+  'deleteAccount',
   // "Owner" comments are anonymous: a caller id next to the comment's time
   // would say which account is the Owner.
   'postComment',

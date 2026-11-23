@@ -60,7 +60,8 @@ export function FilterBar({ filters, setFilters, clearFilters, activeCount, look
   return (
     <div className="mb-4 flex flex-col gap-3" role="search" aria-label="Filter experiences">
       <div className="flex flex-wrap gap-2">
-        <div className="min-w-[12rem] flex-1">
+        {/* Its own row on phones, so the placeholder isn't cut off. */}
+        <div className="min-w-0 basis-full sm:min-w-[12rem] sm:flex-1 sm:basis-0">
           <SearchInput
             value={search}
             onChange={(e) => setSearch(e.target.value)}

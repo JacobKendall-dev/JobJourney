@@ -72,7 +72,7 @@ export default function Landing() {
               name="q"
               type="search"
               placeholder="Search a company or position"
-              className="h-10 flex-1 rounded-md border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              className="h-10 w-full min-w-0 rounded-md border border-border bg-background px-3 sm:flex-1 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
             <button
               type="submit"

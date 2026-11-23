@@ -5,7 +5,9 @@
  * as a form.
  */
 
+import { validateNewCompany, type NewCompanyFields } from './companies'
 import { INTERVIEW_FORMATS, OUTCOMES, WORK_ARRANGEMENTS, isOneOf, type InterviewFormat, type Outcome, type WorkArrangement } from './options'
+import { validateNewPosition, type NewPositionFields } from './positions'
 
 export const STORY_MAX = 2000
 export const MAX_STAGES = 10
@@ -26,10 +28,20 @@ export interface ExperienceContent {
   showName: boolean
 }
 
-export interface NewExperience extends ExperienceContent {
-  companyId: string
-  positionId: string
+/**
+ * Where you applied: an existing company and position, or new ones that
+ * createExperience adds when the post is shared (so nothing is added for a
+ * form that's abandoned). Exactly one of each pair is set, and a new company
+ * always comes with a new position (it has none yet).
+ */
+export interface ExperiencePlace {
+  companyId?: string
+  newCompany?: NewCompanyFields
+  positionId?: string
+  newPosition?: NewPositionFields
 }
+
+export interface NewExperience extends ExperienceContent, ExperiencePlace {}
 
 export type ExperienceField = keyof NewExperience | 'story'
 export type ExperienceErrors = Partial<Record<ExperienceField, string>>
@@ -155,12 +167,44 @@ export function validateNewExperience(raw: unknown, now: Date = new Date()): Val
   const input = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
   const content = validateExperienceContent(input, now)
   const errors: ExperienceErrors = content.ok ? {} : { ...content.errors }
+  const place = validatePlace(input, errors)
+  if (!content.ok || !place) return { ok: false, errors }
+  return { ok: true, value: { ...place, ...content.value } }
+}
 
-  const companyId = typeof input.companyId === 'string' && ID_RE.test(input.companyId) ? input.companyId : null
-  const positionId = typeof input.positionId === 'string' && ID_RE.test(input.positionId) ? input.positionId : null
-  if (!companyId) errors.companyId = 'Choose the company.'
-  if (!positionId) errors.positionId = 'Choose the position.'
+const text = (v: unknown) => (typeof v === 'string' ? v : '')
+const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
 
-  if (!content.ok || !companyId || !positionId) return { ok: false, errors }
-  return { ok: true, value: { companyId, positionId, ...content.value } }
+/** The company and position half of validateNewExperience. Adds to `errors`; null if invalid. */
+function validatePlace(input: Record<string, unknown>, errors: ExperienceErrors): ExperiencePlace | null {
+  const place: ExperiencePlace = {}
+
+  if (isObject(input.newCompany)) {
+    const c = input.newCompany
+    const checked = validateNewCompany({
+      name: text(c.name),
+      industry: text(c.industry),
+      location: text(c.location),
+      website: text(c.website),
+    })
+    if (checked.ok) place.newCompany = checked.fields
+    else errors.companyId = Object.values(checked.errors)[0] ?? "Check the new company's details."
+  } else if (typeof input.companyId === 'string' && ID_RE.test(input.companyId)) {
+    place.companyId = input.companyId
+  } else {
+    errors.companyId = 'Choose the company.'
+  }
+
+  if (isObject(input.newPosition)) {
+    const p = input.newPosition
+    const checked = validateNewPosition({ title: text(p.title), level: text(p.level), category: text(p.category) })
+    if (checked.ok) place.newPosition = checked.fields
+    else errors.positionId = Object.values(checked.errors)[0] ?? "Check the new position's details."
+  } else if (typeof input.positionId === 'string' && ID_RE.test(input.positionId) && !place.newCompany) {
+    place.positionId = input.positionId
+  } else {
+    errors.positionId = place.newCompany ? 'Add the position for this new company.' : 'Choose the position.'
+  }
+
+  return errors.companyId || errors.positionId ? null : place
 }

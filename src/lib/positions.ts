@@ -10,8 +10,14 @@ export interface NewPositionInput {
   category: string
 }
 
+export interface NewPositionFields {
+  title: string
+  level: Level
+  category: Category
+}
+
 export type NewPositionResult =
-  | { ok: true; fields: { title: string; level: Level; category: Category } }
+  | { ok: true; fields: NewPositionFields }
   | { ok: false; errors: Partial<Record<keyof NewPositionInput, string>> }
 
 export function validateNewPosition(input: NewPositionInput): NewPositionResult {

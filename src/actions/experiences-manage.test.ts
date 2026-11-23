@@ -1,7 +1,9 @@
 /**
- * updateExperience and deleteExperience, run against an in-memory fake of the
- * record tools: only the author edits; the author or an admin deletes, and
- * a delete takes the experience's votes, bookmarks, comments and author row.
+ * createExperience's new company / position path, updateExperience and
+ * deleteExperience, run against an in-memory fake of the record tools: a new
+ * company or position is added (as the owner) only when the post is shared;
+ * only the author edits; the author or an admin deletes, and a delete takes
+ * the experience's votes, bookmarks, comments and author row.
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -10,6 +12,7 @@ import type { Env } from '../../worker'
 
 type Row = { recordId: string; createdBy: string; data: Record<string, unknown> }
 let db: Record<string, Row[]>
+let failCreate: string | null = null
 
 function fakeTools(actingUser: string) {
   const ok = <T,>(data: T) => ({ success: true as const, data })
@@ -17,7 +20,14 @@ function fakeTools(actingUser: string) {
   const rows = (c: string) => (db[c] ??= [])
   const matches = (r: Row, where: Record<string, unknown> = {}) =>
     Object.entries(where).every(([k, v]) => (k === 'createdBy' ? r.createdBy : r.data[k]) === v)
+  let next = 0
   return {
+    create: vi.fn(async (c: string, data: Record<string, unknown>) => {
+      if (failCreate === c) return fail('boom')
+      const recordId = `${c}-new-${++next}`
+      rows(c).push({ recordId, createdBy: actingUser, data: { ...data } })
+      return ok({ recordId })
+    }),
     get: vi.fn(async (c: string, id: string) => {
       const r = rows(c).find((x) => x.recordId === id)
       return r ? ok({ record: r }) : fail('not found')
@@ -56,7 +66,7 @@ vi.mock('deepspace/worker', () => ({
   isAnonymousUserId: (id: string) => id.startsWith('anon'),
 }))
 
-const { updateExperience, deleteExperience } = await import('./experiences')
+const { createExperience, updateExperience, deleteExperience } = await import('./experiences')
 
 const ctx = (userId: string, params: Record<string, unknown>) =>
   ({ userId, params, tools: fakeTools(userId) as unknown as ActionTools, env: {} as Env, callerJwt: 'jwt' }) as ActionContext<Env>
@@ -73,7 +83,10 @@ const content = {
 
 beforeEach(() => {
   ownerTools = fakeTools(OWNER)
+  failCreate = null
   db = {
+    companies: [{ recordId: 'c1', createdBy: 'alex', data: { name: 'Acme', slug: 'acme', industry: 'technology' } }],
+    positions: [{ recordId: 'p1', createdBy: 'alex', data: { companyId: 'c1', title: 'Analyst', level: 'entry', category: 'other' } }],
     experiences: [
       {
         recordId: 'e1',
@@ -112,6 +125,66 @@ beforeEach(() => {
 })
 
 const e1 = () => db.experiences.find((e) => e.recordId === 'e1')!.data
+
+describe('createExperience with a new company or position', () => {
+  const share = { ...content, appliedMonth: '2026-01' }
+  const newCompany = { name: 'Nimbus Labs', industry: 'technology', website: 'nimbus.example' }
+  const newPosition = { title: 'Data Intern', level: 'intern', category: 'data' }
+  const latest = () => db.experiences[db.experiences.length - 1]
+
+  it('adds both as the owner, only when the post is shared', async () => {
+    const result = await createExperience(ctx('sam', { ...share, newCompany, newPosition }))
+    expect(result).toMatchObject({ success: true })
+    const company = db.companies.find((c) => c.data.slug === 'nimbus-labs')!
+    const position = db.positions.find((p) => p.data.title === 'Data Intern')!
+    expect(company).toMatchObject({ createdBy: OWNER, data: { website: 'https://nimbus.example/' } })
+    expect(company.data).not.toHaveProperty('verified')
+    expect(position).toMatchObject({ createdBy: OWNER, data: { companyId: company.recordId } })
+    expect(latest()).toMatchObject({ createdBy: OWNER, data: { companyId: company.recordId, positionId: position.recordId } })
+    expect(db.experienceAuthors.at(-1)).toMatchObject({ createdBy: 'sam' })
+  })
+
+  it('adds a new position to an existing company', async () => {
+    expect(await createExperience(ctx('sam', { ...share, companyId: 'c1', newPosition }))).toMatchObject({ success: true })
+    expect(db.companies).toHaveLength(1)
+    expect(latest().data).toMatchObject({ companyId: 'c1', positionId: db.positions.at(-1)!.recordId })
+  })
+
+  it('reuses a "new" company or position that already exists', async () => {
+    const result = await createExperience(
+      ctx('sam', {
+        ...share,
+        newCompany: { name: 'ACME', industry: 'technology' },
+        newPosition: { title: 'Analyst', level: 'entry', category: 'other' },
+      }),
+    )
+    expect(result).toMatchObject({ success: true, data: { experienceId: latest().recordId } })
+    expect(db.experiences).toHaveLength(3)
+    expect(db.companies).toHaveLength(1)
+    expect(db.positions).toHaveLength(1)
+    expect(latest().data).toMatchObject({ companyId: 'c1', positionId: 'p1' })
+  })
+
+  it('refuses an existing position with a new company, or an invalid new one, adding nothing', async () => {
+    expect(await createExperience(ctx('sam', { ...share, newCompany, positionId: 'p1' }))).toMatchObject({
+      code: 'invalid_params',
+    })
+    expect(
+      await createExperience(ctx('sam', { ...share, companyId: 'c1', newPosition: { ...newPosition, level: 'boss' } })),
+    ).toMatchObject({ code: 'invalid_params' })
+    expect(db.companies).toHaveLength(1)
+    expect(db.positions).toHaveLength(1)
+    expect(db.experiences).toHaveLength(2)
+  })
+
+  it('removes what it added when the experience fails to save', async () => {
+    failCreate = 'experiences'
+    expect(await createExperience(ctx('sam', { ...share, newCompany, newPosition }))).toMatchObject({ success: false })
+    expect(ownerTools.remove).toHaveBeenCalledTimes(2)
+    expect(db.companies).toHaveLength(1)
+    expect(db.positions).toHaveLength(1)
+  })
+})
 
 describe('updateExperience', () => {
   it('lets the author edit, as the owner, clearing fields left empty', async () => {

@@ -107,8 +107,8 @@ Generouted file names: `(app)` and `(protected)` are groups and don't appear in 
 One page, in four short sections:
 
 1. **Where you applied**
-   - **Company:** type to search existing companies. Not found → **"+ Add {name}"** opens a small inline form (name, industry, headquarters city, website) that creates the company directly (members can; it starts **unverified**). It uses **`createConfirmed`**, so the form waits until the server accepts. If the slug is taken, show "That company already exists" inline instead of a late toast.
-   - **Position:** pick from that company's positions, or **"+ Add position"** (title, level, category), also with `createConfirmed`.
+   - **Company:** type to search existing companies. Not found → **"+ Add {name}"** opens a small form (name, industry, headquarters city, website). It **saves nothing yet**: the company shows as "New: added when you share", and `createExperience` adds it (**unverified**) when the post is shared, so an abandoned form leaves nothing behind. If the slug is taken, it says "That company already exists" with **Use it**.
+   - **Position:** pick from that company's positions, or **"+ Add a position"** (title, level, category). Like a new company, it's held in the form, shown as "(new)", and added on share. A position already listed is picked instead. A new company has no positions, so the form opens straight away.
    - **Applied:** month and year picker (→ `appliedMonth`, `2026-09`). Future months disabled.
    - **Work arrangement** (optional): Remote, Hybrid or On-site (→ `workArrangement`).
 2. **How it went**
@@ -212,7 +212,7 @@ Build these once and reuse them, so every page looks and behaves the same. The s
 | **OutcomeBadge** | cards, detail | One color per outcome: offer = green, rejected = red, ghosted = gray, withdrew = neutral, in progress = blue. Always shows the word too, not color alone. |
 | **VerifiedBadge** | cards, company pages | A check icon + "Verified". Tooltip: "An admin confirmed this is a real company." |
 | **FilterBar** | Browse, Company | Filters + sort, using `useExperienceFilters`. |
-| **CompanyPicker / PositionPicker** | Share form | Search-as-you-type with "+ Add" at the bottom, using `createConfirmed`. |
+| **CompanyPicker / PositionPicker** | Share form | Search-as-you-type with "+ Add" at the bottom. New ones are added by `createExperience` on share. |
 | **HelpfulButton / BookmarkButton** | detail, cards | Shows your state. Signed out → sign-in prompt. Disabled until ready or while pending. |
 | **CommentThread** | detail | Comments, one level of replies, edit/delete for your own, "\[deleted\]" placeholders. |
 | **SignInPrompt** | anywhere | "Sign in to {mark helpful / comment / bookmark}" with a Sign in button that opens the SDK's `AuthOverlay`. |
@@ -223,7 +223,7 @@ Build these once and reuse them, so every page looks and behaves the same. The s
 - **Loading:** gray skeleton cards in place of real ones (no blank page, no spinner on its own).
 - **Empty:** the page's EmptyState with a useful next step.
 - **Not found:** a friendly message with a way back.
-- **Write rejected:** plain record writes are fire-and-forget. The UI updates first, and a rejection arrives as the layout's toast (`onWriteError`), e.g. "You can only edit your own comment". Writes the next step depends on (adding a company or position) use `createConfirmed` and show the error inline.
+- **Write rejected:** plain record writes are fire-and-forget. The UI updates first, and a rejection arrives as the layout's toast (`onWriteError`), e.g. "You can only edit your own comment". Writes the next step depends on (adding a company on the Companies page) use `createConfirmed` and show the error inline.
 - **Not ready:** write buttons stay disabled until `useMutations().ready`.
 - **Signed out:** read-only, with sign-in prompts in place of buttons.
 - **Mobile:** single column; Browse filters collapse behind a **Filters** button; the share form's preview moves below the form.
@@ -255,5 +255,5 @@ Flows 3 and 4 show off DeepSpace's realtime sync, so they're good for the demo a
 - [ ] Browse with filters
 - [x] Experience detail: helpful, bookmark, comments
 - [x] Edit, My posts, Bookmarks
-- [ ] Admin, including `deleteCompany`
+- [x] Admin, including `deleteCompany`
 - [ ] Loading, empty and mobile states pass

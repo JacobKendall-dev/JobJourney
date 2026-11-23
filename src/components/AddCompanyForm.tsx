@@ -1,12 +1,13 @@
 /**
- * The small "add a company" form, used on /companies now and inside the
- * share form's company picker later.
+ * The small "add a company" form, in two modes:
  *
- * It uses `createConfirmed`, which resolves only once the server accepts the
- * write, so a taken name shows here instead of as a late toast — and the next
- * step (opening the company, or picking it in the share form) never points at
- * a company the server refused. The server still enforces everything: only
- * these fields, a unique slug, and `verified` starting false.
+ * - On /companies (`onCreated`) it saves the company with `createConfirmed`,
+ *   which resolves only once the server accepts the write, so a taken name
+ *   shows here instead of as a late toast. The server still enforces
+ *   everything: only these fields, a unique slug, and `verified` starting false.
+ * - In the share form (`onAddLater`) it saves nothing: the checked details go
+ *   back to the form and createExperience adds the company when the post is
+ *   shared. A company that already exists is offered instead (`onUseExisting`).
  */
 
 import { useState, type FormEvent } from 'react'
@@ -21,6 +22,7 @@ import {
   isDuplicateError,
   slugify,
   validateNewCompany,
+  type NewCompanyFields,
   type NewCompanyInput,
 } from '@/lib/companies'
 import { INDUSTRIES, LABELS } from '@/lib/options'
@@ -32,18 +34,24 @@ export interface CreatedCompany {
   slug: string
 }
 
-interface AddCompanyFormProps {
+type AddCompanyFormProps = {
   initialName?: string
-  onCreated: (company: CreatedCompany) => void
   onCancel?: () => void
-}
+} & (
+  | { onCreated: (company: CreatedCompany) => void; onAddLater?: never; onUseExisting?: never }
+  | {
+      onCreated?: never
+      onAddLater: (company: NewCompanyFields) => void
+      onUseExisting: (companyId: string) => void
+    }
+)
 
 type Errors = Partial<Record<keyof NewCompanyInput, string>>
 
 const selectClass =
   'flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm text-foreground shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive'
 
-export function AddCompanyForm({ initialName = '', onCreated, onCancel }: AddCompanyFormProps) {
+export function AddCompanyForm({ initialName = '', onCreated, onAddLater, onUseExisting, onCancel }: AddCompanyFormProps) {
   const { ready, createConfirmed } = useMutations<Company>('companies')
   const { companyBySlug } = useLookups()
   const [input, setInput] = useState<NewCompanyInput>({
@@ -79,11 +87,15 @@ export function AddCompanyForm({ initialName = '', onCreated, onCancel }: AddCom
       setExistingSlug(result.fields.slug)
       return
     }
+    if (onAddLater) {
+      onAddLater(result.fields)
+      return
+    }
 
     setSaving(true)
     try {
       const recordId = await createConfirmed(result.fields as Company)
-      onCreated({ recordId, name: result.fields.name, slug: result.fields.slug })
+      onCreated?.({ recordId, name: result.fields.name, slug: result.fields.slug })
     } catch (error) {
       if (isDuplicateError(error)) setExistingSlug(result.fields.slug)
       else setFormError(error instanceof Error ? error.message : "Couldn't add the company. Try again.")
@@ -117,9 +129,22 @@ export function AddCompanyForm({ initialName = '', onCreated, onCancel }: AddCom
         {existingSlug && (
           <p className="text-xs text-destructive" role="alert">
             That company already exists.{' '}
-            <Link to={`/companies/${existingSlug}`} className="underline underline-offset-4">
-              Open it
-            </Link>
+            {onUseExisting ? (
+              <button
+                type="button"
+                className="font-medium underline underline-offset-4"
+                onClick={() => {
+                  const existing = companyBySlug.get(existingSlug)
+                  if (existing) onUseExisting(existing.recordId)
+                }}
+              >
+                Use it
+              </button>
+            ) : (
+              <Link to={`/companies/${existingSlug}`} className="underline underline-offset-4">
+                Open it
+              </Link>
+            )}
           </p>
         )}
         {!errors.name && !existingSlug && slugify(input.name) && (
@@ -189,7 +214,9 @@ export function AddCompanyForm({ initialName = '', onCreated, onCancel }: AddCom
       </div>
 
       <p className="text-xs text-muted-foreground">
-        New companies show as Unverified until an admin checks them.
+        {onAddLater
+          ? "It's added when you share your experience, and shows as Unverified until an admin checks it."
+          : 'New companies show as Unverified until an admin checks them.'}
       </p>
 
       {formError && (
@@ -204,8 +231,8 @@ export function AddCompanyForm({ initialName = '', onCreated, onCancel }: AddCom
             Cancel
           </Button>
         )}
-        <Button type="submit" loading={saving} disabled={!ready}>
-          Add company
+        <Button type="submit" loading={saving} disabled={!onAddLater && !ready}>
+          {onAddLater ? 'Use this company' : 'Add company'}
         </Button>
       </div>
     </form>

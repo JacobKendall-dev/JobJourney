@@ -30,12 +30,3 @@ export function PageShell({
     </div>
   )
 }
-
-/** Marks a page section that a later build step fills in. Remove as pages are built. */
-export function Placeholder({ children }: { children: ReactNode }) {
-  return (
-    <div className="rounded-lg border border-dashed border-border p-6 text-sm text-muted-foreground">
-      {children}
-    </div>
-  )
-}

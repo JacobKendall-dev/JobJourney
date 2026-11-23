@@ -1,50 +1,46 @@
 /**
- * Small "add a position" form for one company. Uses `createConfirmed`, so a
- * duplicate (same title and level at this company) is caught before the share
- * form tries to use the new position.
+ * Small "add a position" form for the share form. It saves nothing: the
+ * checked details go back to the share form, and createExperience adds the
+ * position when the experience is shared. A position already listed for the
+ * company (same title and level) is picked instead.
  */
 
 import { useState, type FormEvent } from 'react'
-import { useMutations } from 'deepspace'
 import { Button, Input, Label } from '@/components/ui'
 import { useLookups } from '@/hooks/useLookups'
-import { isDuplicateError } from '@/lib/companies'
 import { CATEGORIES, LABELS, LEVELS } from '@/lib/options'
-import { POSITION_TITLE_MAX, validateNewPosition, type NewPositionInput } from '@/lib/positions'
-import type { Position } from '@/schemas/positions-schema'
-
-export interface CreatedPosition {
-  recordId: string
-  title: string
-  level: string
-}
+import {
+  POSITION_TITLE_MAX,
+  validateNewPosition,
+  type NewPositionFields,
+  type NewPositionInput,
+} from '@/lib/positions'
 
 const selectClass =
   'flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive'
 
 export function AddPositionForm({
   companyId,
-  onCreated,
+  onAddLater,
+  onUseExisting,
   onCancel,
 }: {
-  companyId: string
-  onCreated: (position: CreatedPosition) => void
-  onCancel: () => void
+  /** Null for a company that's being added with this post (it has no positions yet). */
+  companyId: string | null
+  onAddLater: (position: NewPositionFields) => void
+  onUseExisting: (positionId: string) => void
+  onCancel?: () => void
 }) {
-  const { ready, createConfirmed } = useMutations<Position>('positions')
   const { positionsByCompany } = useLookups()
   const [input, setInput] = useState<NewPositionInput>({ title: '', level: '', category: '' })
   const [errors, setErrors] = useState<Partial<Record<keyof NewPositionInput, string>>>({})
-  const [formError, setFormError] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
 
   const update = (key: keyof NewPositionInput, value: string) => {
     setInput((prev) => ({ ...prev, [key]: value }))
     setErrors((prev) => ({ ...prev, [key]: undefined }))
-    setFormError(null)
   }
 
-  async function handleSubmit(event: FormEvent) {
+  function handleSubmit(event: FormEvent) {
     // This form sits inside the share form; don't let the event submit that too.
     event.preventDefault()
     event.stopPropagation()
@@ -53,30 +49,12 @@ export function AddPositionForm({
       setErrors(result.errors)
       return
     }
-    const existing = (positionsByCompany.get(companyId) ?? []).find(
+    const existing = (companyId ? (positionsByCompany.get(companyId) ?? []) : []).find(
       (p) => p.data.title.toLowerCase() === result.fields.title.toLowerCase() && p.data.level === result.fields.level,
     )
-    if (existing) {
-      // Already listed: just use it.
-      onCreated({ recordId: existing.recordId, title: existing.data.title, level: existing.data.level })
-      return
-    }
-
-    setSaving(true)
-    try {
-      const recordId = await createConfirmed({ companyId, ...result.fields })
-      onCreated({ recordId, title: result.fields.title, level: result.fields.level })
-    } catch (error) {
-      setFormError(
-        isDuplicateError(error)
-          ? 'That position is already listed for this company. Pick it from the list.'
-          : error instanceof Error
-            ? error.message
-            : "Couldn't add the position. Try again.",
-      )
-    } finally {
-      setSaving(false)
-    }
+    // Already listed: just use it.
+    if (existing) onUseExisting(existing.recordId)
+    else onAddLater(result.fields)
   }
 
   return (
@@ -88,7 +66,7 @@ export function AddPositionForm({
       onKeyDown={(e) => {
         if (e.key === 'Enter' && (e.target as HTMLElement).tagName === 'INPUT') {
           e.preventDefault()
-          void handleSubmit(e as unknown as FormEvent)
+          handleSubmit(e as unknown as FormEvent)
         }
       }}
     >
@@ -147,23 +125,14 @@ export function AddPositionForm({
           {errors.category && <p className="text-xs text-destructive">{errors.category}</p>}
         </div>
       </div>
-      {formError && (
-        <p className="text-sm text-destructive" role="alert">
-          {formError}
-        </p>
-      )}
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={saving}>
-          Cancel
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          loading={saving}
-          disabled={!ready}
-          onClick={(e) => void handleSubmit(e as unknown as FormEvent)}
-        >
-          Add position
+        {onCancel && (
+          <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+            Cancel
+          </Button>
+        )}
+        <Button type="button" size="sm" onClick={(e) => handleSubmit(e as unknown as FormEvent)}>
+          Use this position
         </Button>
       </div>
     </div>

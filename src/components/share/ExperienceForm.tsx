@@ -38,10 +38,16 @@ import {
   type InterviewFormat,
 } from '@/lib/options'
 import { cn } from '@/lib/utils'
+import type { NewCompanyFields } from '@/lib/companies'
+import type { NewPositionFields } from '@/lib/positions'
 
 export interface FormState {
   companyId: string | null
+  /** A company to add on share; set instead of companyId. */
+  newCompany: NewCompanyFields | null
   positionId: string | null
+  /** A position to add on share; set instead of positionId. */
+  newPosition: NewPositionFields | null
   year: string
   month: string
   workArrangement: string
@@ -57,7 +63,9 @@ export interface FormState {
 
 export const EMPTY_FORM: FormState = {
   companyId: null,
+  newCompany: null,
   positionId: null,
+  newPosition: null,
   year: '',
   month: '',
   workArrangement: '',
@@ -77,7 +85,9 @@ export function formFromExperience(e: Experience): FormState {
   const formats = Array.isArray(e.interviewFormats) ? e.interviewFormats : []
   return {
     companyId: e.companyId,
+    newCompany: null,
     positionId: e.positionId,
+    newPosition: null,
     year,
     month,
     workArrangement: isOneOf(WORK_ARRANGEMENTS, e.workArrangement) ? e.workArrangement : '',
@@ -100,8 +110,8 @@ const YEARS_SHOWN = 6
 function toInput(form: FormState) {
   const days = form.firstResponseDays.trim()
   return {
-    companyId: form.companyId ?? '',
-    positionId: form.positionId ?? '',
+    ...(form.newCompany ? { newCompany: form.newCompany } : { companyId: form.companyId ?? '' }),
+    ...(form.newPosition ? { newPosition: form.newPosition } : { positionId: form.positionId ?? '' }),
     appliedMonth: form.year && form.month ? `${form.year}-${form.month}` : '',
     workArrangement: form.workArrangement || undefined,
     // A non-number stays a string so the validator reports it.
@@ -156,6 +166,10 @@ export function ExperienceForm({ initial, lockPlace, prefillSlug, submitLabel, o
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((f) => ({ ...f, [key]: value }))
+    setServerError(null)
+  }
+  const setPlace = (place: Partial<Pick<FormState, 'companyId' | 'newCompany' | 'positionId' | 'newPosition'>>) => {
+    setForm((f) => ({ ...f, ...place }))
     setServerError(null)
   }
 
@@ -228,16 +242,23 @@ export function ExperienceForm({ initial, lockPlace, prefillSlug, submitLabel, o
                 <Field label="Company" htmlFor="share-company" error={errors.companyId} errorId="share-company-error">
                   <CompanyPicker
                     value={form.companyId}
+                    pending={form.newCompany}
                     error={errors.companyId}
-                    onChange={(companyId) => setForm((f) => ({ ...f, companyId, positionId: null }))}
+                    onChange={(companyId) => setPlace({ companyId, newCompany: null, positionId: null, newPosition: null })}
+                    onPending={(newCompany) =>
+                      setPlace({ companyId: null, newCompany, positionId: null, newPosition: null })
+                    }
                   />
                 </Field>
                 <Field label="Position" htmlFor="share-position" error={errors.positionId} errorId="share-position-error">
                   <PositionPicker
                     companyId={form.companyId}
+                    companyIsNew={!!form.newCompany}
                     value={form.positionId}
+                    pending={form.newPosition}
                     error={errors.positionId}
-                    onChange={(positionId) => set('positionId', positionId)}
+                    onChange={(positionId) => setPlace({ positionId, newPosition: null })}
+                    onPending={(newPosition) => setPlace({ positionId: null, newPosition })}
                   />
                 </Field>
               </>
@@ -484,8 +505,20 @@ export function ExperienceForm({ initial, lockPlace, prefillSlug, submitLabel, o
           <h2 className="mb-2 text-sm font-semibold text-muted-foreground">Preview</h2>
           <ExperienceCard
             experience={preview}
-            company={form.companyId ? companyById.get(form.companyId)?.data : undefined}
-            position={form.positionId ? positionById.get(form.positionId)?.data : undefined}
+            company={
+              form.newCompany
+                ? { ...form.newCompany, verified: 0 }
+                : form.companyId
+                  ? companyById.get(form.companyId)?.data
+                  : undefined
+            }
+            position={
+              form.newPosition
+                ? { ...form.newPosition, companyId: '' }
+                : form.positionId
+                  ? positionById.get(form.positionId)?.data
+                  : undefined
+            }
           />
           <p className="mt-2 text-xs text-muted-foreground">
             {form.showName && user?.name ? `Shared by ${user.name}` : 'Shared anonymously'} · This is how your post

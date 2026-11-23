@@ -97,12 +97,10 @@ describe('companies', () => {
 })
 
 describe('positions', () => {
-  const newPosition = { companyId: 'c1', title: 'Software Engineer Intern', level: 'intern', category: 'software' }
-
-  it('members can create with the allowed fields, visitors cannot', () => {
-    expect(canCreate(positionsSchema, 'member')).toBe(true)
-    expect(checkFieldPermissions(positionsSchema, 'member', newPosition)).toBeNull()
+  it('only admins create directly; members add positions through createExperience', () => {
+    expect(canCreate(positionsSchema, 'member')).toBe(false)
     expect(canCreate(positionsSchema, 'viewer')).toBe(false)
+    expect(canCreate(positionsSchema, 'admin')).toBe(true)
   })
 
   it('members cannot update or delete; admins can', () => {

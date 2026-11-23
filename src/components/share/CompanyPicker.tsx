@@ -1,33 +1,38 @@
 /**
  * Search-as-you-type company picker for the share form, with "+ Add" for a
- * company that isn't listed yet (opens AddCompanyForm in a modal).
+ * company that isn't listed yet (opens AddCompanyForm in a modal). A new
+ * company isn't saved here: createExperience adds it when the post is shared.
  */
 
 import { useMemo, useState } from 'react'
 import { Plus } from 'lucide-react'
-import { AddCompanyForm, type CreatedCompany } from '@/components/AddCompanyForm'
+import { AddCompanyForm } from '@/components/AddCompanyForm'
 import { VerifiedBadge } from '@/components/VerifiedBadge'
 import { Button, Modal, SearchInput } from '@/components/ui'
 import { useLookups } from '@/hooks/useLookups'
+import type { NewCompanyFields } from '@/lib/companies'
 import { INDUSTRIES, isTrue, labelFor } from '@/lib/options'
 
 const MAX_RESULTS = 8
 
 export function CompanyPicker({
   value,
+  pending,
   onChange,
+  onPending,
   error,
 }: {
   value: string | null
+  /** A company to add when the post is shared. */
+  pending: NewCompanyFields | null
+  /** Null clears both the choice and any pending company. */
   onChange: (companyId: string | null) => void
+  onPending: (company: NewCompanyFields) => void
   error?: string
 }) {
   const { companies, companyById, status } = useLookups()
   const [search, setSearch] = useState('')
   const [adding, setAdding] = useState(false)
-  // A just-created company may arrive in the live list a moment after the
-  // server confirms it; show its name meanwhile.
-  const [justCreated, setJustCreated] = useState<CreatedCompany | null>(null)
 
   const term = search.trim().toLowerCase()
   const results = useMemo(
@@ -40,9 +45,24 @@ export function CompanyPicker({
   )
   const exactMatch = companies.some((c) => c.data.name.toLowerCase() === term)
 
+  if (pending) {
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 py-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="font-medium text-foreground">{pending.name}</span>
+          <span className="text-xs text-muted-foreground">New: added when you share</span>
+          <span className="text-xs text-muted-foreground">{labelFor(INDUSTRIES, pending.industry)}</span>
+        </div>
+        <Button type="button" variant="ghost" size="sm" onClick={() => onChange(null)}>
+          Change
+        </Button>
+      </div>
+    )
+  }
+
   if (value) {
     const selected = companyById.get(value)
-    const name = selected?.data.name ?? (justCreated?.recordId === value ? justCreated.name : 'Selected company')
+    const name = selected?.data.name ?? 'Selected company'
     return (
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 py-2">
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
@@ -124,11 +144,15 @@ export function CompanyPicker({
             <AddCompanyForm
               initialName={search.trim()}
               onCancel={() => setAdding(false)}
-              onCreated={(company) => {
-                setJustCreated(company)
+              onAddLater={(company) => {
                 setAdding(false)
                 setSearch('')
-                onChange(company.recordId)
+                onPending(company)
+              }}
+              onUseExisting={(companyId) => {
+                setAdding(false)
+                setSearch('')
+                onChange(companyId)
               }}
             />
           )}

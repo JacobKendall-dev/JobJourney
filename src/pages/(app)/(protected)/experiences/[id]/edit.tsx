@@ -71,7 +71,7 @@ export default function EditExperiencePage() {
         onCancel={() => navigate(detailUrl)}
         onSubmit={async (value) => {
           // Company and position are fixed; send only the content.
-          const { companyId: _companyId, positionId: _positionId, ...content } = value
+          const { companyId: _c, newCompany: _nc, positionId: _p, newPosition: _np, ...content } = value
           const result = await callAction('updateExperience', { experienceId: id, ...content })
           if (!result.success) return result.error
           success('Saved.', 'Your experience is updated.')

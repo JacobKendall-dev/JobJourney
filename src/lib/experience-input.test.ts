@@ -98,3 +98,42 @@ describe('validateNewExperience', () => {
     expect(validateNewExperience('nope', NOW).ok).toBe(false)
   })
 })
+
+describe('validateNewExperience: new company or position', () => {
+  const content = {
+    appliedMonth: '2026-01',
+    noResponse: true,
+    interviewStages: 0,
+    interviewFormats: [],
+    outcome: 'ghosted',
+    advice: 'Follow up.',
+    showName: false,
+  }
+  const now = new Date('2026-06-01T00:00:00Z')
+  const newCompany = { name: '  Nimbus   Labs ', industry: 'technology' }
+  const newPosition = { title: 'Data  Intern', level: 'intern', category: 'data' }
+
+  it('accepts new details, tidied', () => {
+    const result = validateNewExperience({ ...content, newCompany, newPosition }, now)
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        newCompany: { name: 'Nimbus Labs', slug: 'nimbus-labs', industry: 'technology' },
+        newPosition: { title: 'Data Intern', level: 'intern', category: 'data' },
+      },
+    })
+  })
+
+  it('needs a new position with a new company', () => {
+    const result = validateNewExperience({ ...content, newCompany, positionId: 'p1' }, now)
+    expect(result).toMatchObject({ ok: false, errors: { positionId: 'Add the position for this new company.' } })
+  })
+
+  it('reports bad new details on the company and position fields', () => {
+    const result = validateNewExperience(
+      { ...content, newCompany: { name: 'X', industry: 'nope' }, newPosition: { title: 'Dev', level: '?', category: 'data' } },
+      now,
+    )
+    expect(result).toMatchObject({ ok: false, errors: { companyId: expect.any(String), positionId: 'Choose a level.' } })
+  })
+})

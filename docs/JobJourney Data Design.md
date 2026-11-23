@@ -48,6 +48,7 @@ CareerTrail's data model: the **collections** (tables), their fields, who can do
 | Added `noResponse` (boolean) to experiences. | The share form offers "No response yet". Without a flag, an empty `firstResponseDays` can't tell "no response yet" apart from "didn't say". |
 | `companyId` and `positionId` on experiences are `immutable`. | The edit page doesn't let them change; now the server refuses it too. |
 | `updateExperience` sets `authorName` from the user's account. | The edit page can switch between anonymous and named, and the name must never come from the browser. |
+| A company or position added in the share form is created by `createExperience` (as the owner) when the post is shared. Members can no longer create positions directly. | Adding them straight away left them behind when the form was abandoned. It also leaked anonymity: the new company's or position's public `createdBy` was the member, and an anonymous post using it appeared moments later. |
 | Added a `deleteCompany` action; admins can no longer delete companies directly. | A company deleted while it has experiences would leave posts pointing at nothing. The action refuses in that case and removes the company's positions otherwise. |
 | The app owner caveat is added to the remaining risks. | People who control the app's code can still read authorship server-side; the privacy promise is about other users. |
 | Browse loads all experiences and filters and pages in the browser. | In the browser, `useQuery` has no `offset` and no total count, so paging on the server can't give a correct count or work with browser filters. |
@@ -94,6 +95,7 @@ Two storage facts to remember (checked in SDK 0.44.2):
 - `level` (`select`): intern, entry, mid, senior
 - `category` (`select`): software, IT, cybersecurity, data, other
 - **`uniqueOn: ['companyId', 'title', 'level']`** prevents duplicate positions
+- Members don't create positions directly. A new one is added by `createExperience`, as the owner, when the post is shared.
 
 ### experiences (public, no author id)
 
@@ -167,7 +169,7 @@ Who:
 | Collection | Read | Create | Update | Delete |
 | --- | --- | --- | --- | --- |
 | companies | everyone | member, `writableFields: name, slug, industry, location, website` | admin (incl. `verified`) | action only (`deleteCompany`) |
-| positions | everyone | member, `writableFields: companyId, title, level, category` | admin | admin |
+| positions | everyone | admin (members add them through `createExperience`) | admin | admin |
 | experiences | everyone | action only | action only (author) | action only (author or admin) |
 | experienceAuthors | member and admin: `own` only | action only | nobody | action only |
 | comments | everyone | action only (`postComment`) | member: `own`, `writableFields: body, deleted`. admin: all | admin (the `deleteExperience` cascade) |
@@ -211,7 +213,7 @@ uniqueOn: ['experienceId', 'userId'],
 - **Authorship is readable only by the author.** Admins moderate with `deleteExperience` and never need to know who wrote a post. Queries for "my posts" should still include `where: { createdBy: user.id }` so the intent is explicit.
 - **Companies are deleted only through `deleteCompany`**, so a company with experiences can't disappear from under them.
 - **Votes are readable only by the voter.** Pages show `helpfulCount`, and nobody can browse who voted for what.
-- **Members can add companies and positions** so the site isn't limited to what you seed. `uniqueOn` prevents duplicates, `writableFields` keeps `verified` out of their reach, and admins can clean up. Nothing checks that a position's `companyId` exists, so admins should watch for stray positions.
+- **Members can add companies and positions** so the site isn't limited to what you seed. On the Companies page a member creates a company directly (`writableFields` keeps `verified` out of their reach). In the share form, a new company or position is only held in the form and `createExperience` adds it, as the owner, when the post is shared, so an abandoned form adds nothing and the record's `createdBy` can't be matched to an anonymous post. `uniqueOn` prevents duplicates, and admins can clean up. Nothing checks that a position's `companyId` exists, so admins should watch for stray positions.
 - **Test every row with two accounts and while signed out** in `npm test`. That's the multi-user verification DeepSpace looks for.
 
 ## Actions
@@ -226,7 +228,7 @@ Remember: **record permissions are OFF inside actions** (`X-App-Action: 'true'`)
 
 | Action | What it does | Checks it must make |
 | --- | --- | --- |
-| `createExperience` | Creates the public experience **with the owner tools**, then its `experienceAuthors` row **with the caller tools**. Sets `authorName` only if the user chose to show it, from their `users` row. | Signed in. Company and position exist, and the position belongs to the company. Fields pass validation (below). Never copy the user ID onto the experience. If creating the author row fails, delete the experience. |
+| `createExperience` | Creates the public experience **with the owner tools**, then its `experienceAuthors` row **with the caller tools**. Sets `authorName` only if the user chose to show it, from their `users` row. | Signed in. Takes `companyId` or `newCompany` (name, industry, location, website), and `positionId` or `newPosition` (title, level, category); a new company needs a new position. Existing ones must exist, and the position must belong to the company. New ones are validated, reused if they already exist (same slug; same title and level), otherwise created **with the owner tools** (a company starts unverified), and removed again if the share then fails. Fields pass validation (below). Never copy the user ID onto the experience. If creating the author row fails, delete the experience. |
 | `updateExperience` | Edits an experience's details, with the owner tools. Sets `authorName` from the user's `users` row when "Show my name" is on, and clears it when it's off. | An `experienceAuthors` row exists with this `experienceId` and `createdBy` = this user. Only accepts content fields and the anonymity choice, never `companyId`, `positionId`, `helpfulCount`, `commentCount` or `authorName` sent from the browser. Fields pass validation. |
 | `deleteExperience` | Deletes the experience (owner tools), then its author row, votes, bookmarks and comments with `deleteWhere({ experienceId })`. Repeats each until fewer than the limit are deleted. | The user is the author **or** an admin. Every `deleteWhere` must be scoped to this `experienceId`. |
 | `toggleHelpful` | Looks for this user's vote. Removes it if found, creates one if not. Then **recounts** the experience's votes and writes `helpfulCount`. | Signed in. Experience exists. The user isn't its author (check `experienceAuthors`). A "Duplicate" error from `uniqueOn` means a vote already exists, so treat it as success. Recounting must page through results (`offset`/`nextOffset`), because a query returns 50 records by default. |
@@ -236,7 +238,7 @@ Remember: **record permissions are OFF inside actions** (`X-App-Action: 'true'`)
 | `seedSampleData` | Adds the sample companies, positions and 10 sample experiences (every outcome), skipping any that already exist. Sample experiences are written as the owner with fixed ids and **no author row**, so nobody can edit them and admins can delete them. | The user is an admin. Every sample name starts with Example, Sample, Demo or Placeholder. |
 | `deleteCompany` | Deletes a company and its positions (`deleteWhere({ companyId })`). | The user is an admin. **Refuses** if any experience has this `companyId` (query with `limit: 1`), and says how to resolve it: delete or move those experiences first. |
 
-Not actions (handled by permission rules): creating a company or position, editing or soft-deleting your own comment (the UI sets `deleted: true` and `body: ""` together), and bookmarks.
+Not actions (handled by permission rules): creating a company from the Companies page, editing or soft-deleting your own comment (the UI sets `deleted: true` and `body: ""` together), and bookmarks.
 
 `commentCount` counts every comment, deleted placeholders included, because soft delete doesn't go through an action.
 

@@ -12,7 +12,7 @@
 
 import { resolveAppRole, type ActionHandler, type ActionTools } from 'deepspace/worker'
 import type { Env } from '../../worker'
-import { validateExperienceContent, validateNewExperience } from '../lib/experience-input'
+import { validateExperienceContent, validateNewExperience, type NewExperience } from '../lib/experience-input'
 import { createOwnerRecordTools } from '../server/record-tools'
 import { readId, refuse, requireMember } from './guards'
 
@@ -27,8 +27,79 @@ export async function isExperienceAuthor(tools: ActionTools, experienceId: strin
 
 const AUTHOR_NAME_MAX = 100
 
+type OwnerTools = NonNullable<ReturnType<typeof createOwnerRecordTools>>
+type Added = { companyId?: string; positionId?: string }
+type PlaceResult =
+  | { ok: true; companyId: string; positionId: string; added: Added }
+  | { ok: false; refusal: ReturnType<typeof refuse> }
+
+const isDuplicate = (error: string) => /^duplicate/i.test(error.trim())
+
+/** The first row matching `where`, or null. Undefined if the query failed. */
+async function findOne(tools: ActionTools, collection: string, where: Record<string, unknown>) {
+  const found = await tools.query(collection, { where, limit: 1 })
+  if (!found.success) return undefined
+  return found.data.records[0]?.recordId ?? null
+}
+
 /**
- * params: the share form — companyId, positionId, appliedMonth,
+ * Check or add the company and position for a new experience. A "new" one
+ * that already exists (same slug; same title and level at the company) is
+ * reused rather than refused, so two people adding it at once both succeed.
+ */
+async function resolvePlace(tools: ActionTools, owner: OwnerTools, input: NewExperience): Promise<PlaceResult> {
+  const fail = (message: string, code: string): PlaceResult => ({ ok: false, refusal: refuse(message, code) })
+  const added: Added = {}
+
+  let companyId = input.companyId
+  if (input.newCompany) {
+    const fields = input.newCompany
+    companyId = (await findOne(tools, 'companies', { slug: fields.slug })) ?? undefined
+    if (!companyId) {
+      const made = await owner.create('companies', { ...fields })
+      if (made.success) companyId = added.companyId = made.data.recordId
+      else if (isDuplicate(made.error)) companyId = (await findOne(tools, 'companies', { slug: fields.slug })) ?? undefined
+      if (!companyId) return fail("Couldn't add the company. Try again.", 'company_failed')
+    }
+  } else {
+    const company = companyId ? await tools.get('companies', companyId) : undefined
+    if (!company?.success) return fail('That company no longer exists.', 'company_not_found')
+  }
+  if (!companyId) return fail('Choose the company.', 'invalid_params')
+
+  let positionId = input.positionId
+  if (input.newPosition) {
+    const where = { companyId, title: input.newPosition.title, level: input.newPosition.level }
+    positionId = (await findOne(tools, 'positions', where)) ?? undefined
+    if (!positionId) {
+      const made = await owner.create('positions', { companyId, ...input.newPosition })
+      if (made.success) positionId = added.positionId = made.data.recordId
+      else if (isDuplicate(made.error)) positionId = (await findOne(tools, 'positions', where)) ?? undefined
+    }
+    if (!positionId) {
+      await undoAdded(owner, added)
+      return fail("Couldn't add the position. Try again.", 'position_failed')
+    }
+  } else {
+    const position = positionId ? await tools.get<{ companyId?: string }>('positions', positionId) : undefined
+    if (!position?.success || position.data.record.data.companyId !== companyId) {
+      await undoAdded(owner, added)
+      return fail("That position isn't listed for this company.", 'position_not_found')
+    }
+  }
+
+  return { ok: true, companyId, positionId: positionId!, added }
+}
+
+/** Remove a company or position this request added, when the share fails after all. */
+async function undoAdded(owner: OwnerTools, added: Added) {
+  if (added.positionId) await owner.remove('positions', added.positionId)
+  if (added.companyId) await owner.remove('companies', added.companyId)
+}
+
+/**
+ * params: the share form — companyId or newCompany, positionId or
+ * newPosition, appliedMonth,
  * workArrangement?, firstResponseDays?, noResponse, interviewStages,
  * interviewFormats, outcome, interviewExperience?, advice?, showName.
  * Returns { experienceId }.
@@ -44,14 +115,6 @@ export const createExperience: ActionHandler<Env> = async ({ userId, params, too
   }
   const input = checked.value
 
-  // The company and position must exist, and the position must belong to it.
-  const company = await tools.get('companies', input.companyId)
-  if (!company.success) return refuse('That company no longer exists.', 'company_not_found')
-  const position = await tools.get<{ companyId?: string }>('positions', input.positionId)
-  if (!position.success || position.data.record.data.companyId !== input.companyId) {
-    return refuse("That position isn't listed for this company.", 'position_not_found')
-  }
-
   // The name comes from the account, never from the browser.
   let authorName: string | undefined
   if (input.showName) {
@@ -62,9 +125,15 @@ export const createExperience: ActionHandler<Env> = async ({ userId, params, too
     }
   }
 
+  // The company and position: existing ones are checked, new ones are added
+  // now (as the owner, so their createdBy doesn't point at the author).
+  const place = await resolvePlace(tools, owner, input)
+  if (!place.ok) return place.refusal
+  const { companyId, positionId, added } = place
+
   const created = await owner.create('experiences', {
-    companyId: input.companyId,
-    positionId: input.positionId,
+    companyId,
+    positionId,
     isAnonymous: !input.showName,
     ...(authorName ? { authorName } : {}),
     appliedMonth: input.appliedMonth,
@@ -79,7 +148,10 @@ export const createExperience: ActionHandler<Env> = async ({ userId, params, too
     helpfulCount: 0,
     commentCount: 0,
   })
-  if (!created.success) return refuse(`Couldn't share your experience: ${created.error}`)
+  if (!created.success) {
+    await undoAdded(owner, added)
+    return refuse(`Couldn't share your experience: ${created.error}`)
+  }
   const experienceId = created.data.recordId
 
   // The private author row, written as the caller.
@@ -87,6 +159,7 @@ export const createExperience: ActionHandler<Env> = async ({ userId, params, too
   if (!author.success) {
     // Without an author row nobody could edit or delete the post; undo it.
     await owner.remove('experiences', experienceId)
+    await undoAdded(owner, added)
     return refuse("Couldn't share your experience. Nothing was saved; try again.", 'author_row_failed')
   }
 

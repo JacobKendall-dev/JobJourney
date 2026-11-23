@@ -6,20 +6,22 @@
  * render this page instead.
  *
  * Helpful goes through `toggleHelpful`, comments through `postComment`;
- * bookmarks and comment edits are direct writes. The author's Edit / Delete
- * arrive with the "Edit, My posts, Bookmarks" step.
+ * bookmarks and comment edits are direct writes. The author gets Edit and
+ * Delete; admins get Delete for moderation (deleteExperience re-checks both).
  */
 
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from 'deepspace'
-import { FileQuestion } from 'lucide-react'
+import { FileQuestion, Pencil } from 'lucide-react'
 import { BookmarkButton } from '@/components/BookmarkButton'
 import { CommentThread } from '@/components/CommentThread'
+import { DeleteExperienceButton } from '@/components/DeleteExperienceButton'
 import { EmptyState } from '@/components/EmptyState'
 import { HelpfulButton } from '@/components/HelpfulButton'
 import { ExperienceCardSkeleton } from '@/components/ExperienceCard'
 import { OutcomeBadge } from '@/components/OutcomeBadge'
 import { PageShell } from '@/components/PageShell'
+import { buttonVariants } from '@/components/ui'
 import { VerifiedBadge } from '@/components/VerifiedBadge'
 import { useExperiences } from '@/hooks/useExperiences'
 import { useRole } from '@/hooks/useRole'
@@ -30,6 +32,7 @@ import type { ExperienceAuthor } from '@/schemas/experience-authors-schema'
 
 export default function ExperienceDetailPage() {
   const { id = '' } = useParams()
+  const navigate = useNavigate()
   const { experiences, status } = useExperiences()
   const { companyById, positionById } = useLookups()
   const auth = useRole()
@@ -138,7 +141,27 @@ export default function ExperienceDetailPage() {
           <>
             <HelpfulButton experienceId={id} count={e.helpfulCount ?? 0} userId={userId} isAuthor={isAuthor} />
             <BookmarkButton experienceId={id} userId={userId} />
-            {isAuthor && <span className="text-xs text-muted-foreground">This is your post.</span>}
+            {isAuthor ? (
+              <>
+                <Link
+                  to={`/experiences/${encodeURIComponent(id)}/edit`}
+                  className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                >
+                  <Pencil aria-hidden />
+                  Edit
+                </Link>
+                <DeleteExperienceButton experienceId={id} onDeleted={() => navigate('/me', { replace: true })} />
+                <span className="text-xs text-muted-foreground">This is your post.</span>
+              </>
+            ) : (
+              auth.isAdmin && (
+                <DeleteExperienceButton
+                  experienceId={id}
+                  asAdmin
+                  onDeleted={() => navigate('/experiences', { replace: true })}
+                />
+              )
+            )}
           </>
         ) : (
           <div className="h-8 w-48 animate-pulse rounded-md bg-muted" aria-hidden />

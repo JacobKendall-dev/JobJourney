@@ -254,6 +254,6 @@ Flows 3 and 4 show off DeepSpace's realtime sync, so they're good for the demo a
 - [ ] Share form + `createExperience`
 - [ ] Browse with filters
 - [x] Experience detail: helpful, bookmark, comments
-- [ ] Edit, My posts, Bookmarks
+- [x] Edit, My posts, Bookmarks
 - [ ] Admin, including `deleteCompany`
 - [ ] Loading, empty and mobile states pass

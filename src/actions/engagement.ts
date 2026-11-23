@@ -20,6 +20,7 @@ import type { Env } from '../../worker'
 import { checkCommentBody, replyPlacement } from '../lib/comments'
 import { isTrue } from '../lib/options'
 import { createOwnerRecordTools, type RecordTools } from '../server/record-tools'
+import { isExperienceAuthor } from './experiences'
 import { readId, refuse, requireMember } from './guards'
 
 const AUTHOR_NAME_MAX = 100
@@ -39,16 +40,6 @@ async function recount(
   const count = rows.data.records.length
   const saved = await owner.update('experiences', experienceId, { [field]: count })
   return saved.success ? count : null
-}
-
-/**
- * Whether `userId` wrote this experience. Permissions are off in actions, so
- * this reads the private author row; only the yes/no leaves the server.
- * Null when the lookup failed.
- */
-async function isExperienceAuthor(tools: ActionTools, experienceId: string, userId: string) {
-  const rows = await tools.query('experienceAuthors', { where: { experienceId, createdBy: userId }, limit: 1 })
-  return rows.success ? rows.data.records.length > 0 : null
 }
 
 /**

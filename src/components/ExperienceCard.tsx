@@ -10,6 +10,7 @@
  *   uses dangerouslySetInnerHTML.
  */
 
+import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { MessageSquare, ThumbsUp } from 'lucide-react'
 import { OutcomeBadge } from './OutcomeBadge'
@@ -33,11 +34,16 @@ export interface ExperienceCardProps {
   company?: Pick<Company, 'name' | 'verified'>
   position?: Pick<Position, 'title'>
   className?: string
+  /**
+   * Controls shown at the bottom of the card (Edit, Delete, Remove). They sit
+   * above the card's full-size link, so they stay clickable.
+   */
+  actions?: ReactNode
 }
 
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`
 
-export function ExperienceCard({ experience, id, company, position, className }: ExperienceCardProps) {
+export function ExperienceCard({ experience, id, company, position, className, actions }: ExperienceCardProps) {
   const title = position?.title || 'Unknown position'
   const facts = [
     isOneOf(WORK_ARRANGEMENTS, experience.workArrangement) && LABELS[experience.workArrangement],
@@ -114,6 +120,8 @@ export function ExperienceCard({ experience, id, company, position, className }:
           {plural(comments, 'comment')}
         </span>
       </p>
+
+      {actions && <div className="relative z-10 flex flex-wrap gap-2 border-t border-border pt-3">{actions}</div>}
     </article>
   )
 }

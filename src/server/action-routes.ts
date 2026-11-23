@@ -49,6 +49,7 @@ type ResolveAuth = (req: Request, env: Env) => Promise<VerifyResult | null>
 const AUTHOR_PRIVATE_ACTIONS = new Set([
   'createExperience',
   'updateExperience',
+  'deleteExperience',
   // "Owner" comments are anonymous: a caller id next to the comment's time
   // would say which account is the Owner.
   'postComment',

@@ -1,8 +1,8 @@
 /**
  * One color per outcome, always with the word (never color alone):
  * offer = green, rejected = red, ghosted = gray, withdrew = neutral,
- * in progress = blue. Tinted (colored text on a faint fill) so the word stays
- * readable on the dark theme.
+ * in progress = blue. Tinted (colored text on a faint fill of the same color),
+ * using the theme's status colors, which are dark enough to read as text.
  */
 
 import { cn } from '@/lib/utils'

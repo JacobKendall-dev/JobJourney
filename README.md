@@ -78,7 +78,7 @@ The privacy check and the comment email use paid DeepSpace integrations, billed 
 - **[DeepSpace](https://deep.space)** on **Cloudflare Workers** and Durable Objects: real-time synced records, auth, role-based permissions, server actions, scheduled tasks
 - **React 19**, **TypeScript**, **Tailwind CSS v4**, file-based routing
 - **Claude Haiku** for the privacy check, and transactional email for the comment digest, both through DeepSpace integrations
-- **Vitest** (213 unit tests) and **Playwright** (36 browser tests at phone and desktop widths)
+- **Vitest** (214 unit tests) and **Playwright** (39 browser tests, including two-person tests with separate signed-in accounts)
 
 ## Where to look in the code
 
@@ -94,8 +94,9 @@ The privacy check and the comment email use paid DeepSpace integrations, billed 
 
 ## Decisions worth mentioning
 
-- **Every write that matters goes through a server action.** Actions run with permissions off, so each one checks the caller's role and the records it touches itself. These checks have unit tests.
+- **Every write that matters goes through a server action.** Actions run with permissions off, so each one checks the caller's role and the records it touches itself. These checks have unit tests, and AI assistants connected to the app get read-only tools, so they can't go around them.
 - **Mistakes don't leave junk behind.** Adding a company or position while sharing saves nothing until the post is actually shared. If a later step fails, they're removed again.
 - **Paid features stay optional.** The privacy check and the email digest only advise or inform. If they fail, are capped or run out of credits, the app works exactly as it did before.
 - **Deleting your account deletes your data.** Your posts, votes, bookmarks and profile are removed. Your comments become "[deleted]" so the replies to them still make sense.
+- **The privacy promises are tested with two real accounts.** Alice shares anonymously while Bob reads, comments and votes. The tests check that Alice's id never reaches Bob's browser, that her reply shows as "Owner", that Bob can't edit or delete her post, and that votes update live.
 - **Mobile is part of the test suite.** Every main page is checked at phone and desktop widths for console errors and sideways scrolling.

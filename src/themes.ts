@@ -1,31 +1,21 @@
 /**
- * Theme catalog.
- *
- * The scaffold ships two placeholder themes: `slate` (dark default, defined
- * in styles.css) and `paper` (light example, defined in themes.css). They
- * are scaffolding, not a design — give the app its own theme before first
- * deploy:
- *   1. Add a `[data-theme="my-id"] { ... }` block in src/themes.css with
- *      the shadcn token overrides (include `color-scheme: light;` for
- *      light themes).
- *   2. Add an entry here for type safety, autocomplete, and UI display.
- *   3. Add the theme's background to the first-paint <style> block in
- *      index.html so the pre-CSS frame matches (no white flash).
- *   4. Switch via `data-theme` on <html> in index.html.
+ * Theme catalog. JobJourney ships one theme, `trail`, defined in
+ * src/themes.css and set on <html> in index.html. `slate` is the base token
+ * set in styles.css that every theme overrides; it isn't used on its own.
  *
  * Color values live in styles.css / themes.css — this file is metadata only.
  */
 
 export const THEMES = [
   {
-    id: 'slate',
-    label: 'Slate',
-    description: 'Neutral dark placeholder default. Replace with your own theme.',
+    id: 'trail',
+    label: 'Trail',
+    description: "JobJourney's theme: light green-tinted surface, ink text, evergreen accent.",
   },
   {
-    id: 'paper',
-    label: 'Paper',
-    description: 'Light example theme showing the token contract. Replace or delete.',
+    id: 'slate',
+    label: 'Slate',
+    description: 'Base dark token set from the scaffold. Not used on its own.',
   },
 ] as const
 

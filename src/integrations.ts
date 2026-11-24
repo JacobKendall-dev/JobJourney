@@ -24,6 +24,9 @@ export const integrations: Record<
   string,
   { billing: 'developer' | 'user'; anonymous?: boolean }
 > = {
+  // JobJourney doesn't use these. They stay listed as 'user' on purpose: the
+  // proxy is open to any signed-in caller, and left at the 'developer'
+  // default they would act on the app owner's connected accounts.
   google: { billing: 'user' },
   composio: { billing: 'user' },
   // Paid by the app owner, signed-in callers only. Spending is capped in

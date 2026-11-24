@@ -1,10 +1,11 @@
 /**
  * AI Tool Definitions — converts DeepSpace BUILT_IN_TOOLS to Vercel AI SDK tools.
  *
- * The assistant can read AND modify data. Per-collection RBAC at the DO
- * layer is the actual security boundary — the user's role determines what
- * each tool call is allowed to do, regardless of what's in this allowlist.
- * Trim entries below if you want a stricter assistant for your app.
+ * READ-ONLY. An assistant can look things up as the signed-in user, with that
+ * user's permissions, but can't change anything. Every JobJourney write that
+ * matters goes through a server action (src/actions/) that checks the caller
+ * and keeps posts anonymous; a direct record write from an assistant would
+ * skip those checks and stamp the caller's id on whatever it created.
  */
 
 import { jsonSchema, tool } from 'ai'
@@ -20,9 +21,6 @@ const ALLOWED_TOOL_NAMES = [
   'schema.describe',
   'records.query',
   'records.get',
-  'records.create',
-  'records.update',
-  'records.delete',
   'user.current',
 ]
 
@@ -55,15 +53,9 @@ export function buildSystemPrompt(appName: string, schemas: CollectionSchema[]):
 
   return [
     `You are the assistant for the "${appName}" app on DeepSpace.`,
-    "You can read and modify the user's data via the available tools. The",
-    "user's own role and permissions still apply at the data layer — your",
-    'tool calls run as the calling user, so you can only do what they could.',
-    '',
-    'Be careful with mutations:',
-    '- Confirm intent before destructive actions (delete, bulk update).',
-    '- Operate only on collections the user explicitly mentioned.',
-    '- After a successful write, briefly confirm what changed.',
-    '- If a write is denied (RBAC), tell the user plainly — do not retry blindly.',
+    'You can look up data with the available tools, but you cannot change it.',
+    'Your tool calls run as the calling user, so you see only what they could.',
+    'To share, edit or delete anything, the user does it in the app itself.',
     '',
     'Use tools to look up facts before answering. Do not invent data.',
     'If data is missing, say so plainly. Keep answers concise.',

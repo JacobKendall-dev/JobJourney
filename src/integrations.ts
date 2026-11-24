@@ -26,5 +26,8 @@ export const integrations: Record<
 > = {
   google: { billing: 'user' },
   composio: { billing: 'user' },
-  // openai: { billing: 'developer', anonymous: true },
+  // Paid by the app owner, signed-in callers only. Spending is capped in
+  // src/lib/paid-limits.ts.
+  anthropic: { billing: 'developer' }, // privacy check before sharing
+  email: { billing: 'developer' }, // daily comment digest
 }

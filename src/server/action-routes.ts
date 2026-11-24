@@ -56,6 +56,8 @@ const AUTHOR_PRIVATE_ACTIONS = new Set([
   // would say which account is the Owner.
   'postComment',
   'updateAuthorComment',
+  // Checked just before sharing, so its time would hint at which post is whose.
+  'reviewPrivacy',
 ])
 
 export function registerActionRoutes(app: Hono<AppContext>, resolveAuth: ResolveAuth): void {

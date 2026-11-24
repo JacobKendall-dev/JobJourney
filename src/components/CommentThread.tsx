@@ -20,6 +20,7 @@ import { CornerDownRight, MessageSquare } from 'lucide-react'
 import { Button, ConfirmModal, Textarea, useToast } from '@/components/ui'
 import { SignInButton } from '@/components/SignInButton'
 import { callAction } from '@/lib/actions'
+import { findObviousDetails } from '@/lib/privacy'
 import {
   COMMENT_MAX,
   OWNER_LABEL,
@@ -223,6 +224,7 @@ function CommentForm({
           {body.length}/{COMMENT_MAX.toLocaleString()}
         </span>
       </div>
+      <PrivacyHint text={body} />
       {note && <p className="text-xs text-muted-foreground">{note}</p>}
       {error && (
         <p id={`${fieldId}-error`} role="alert" className="text-sm text-destructive">
@@ -230,6 +232,18 @@ function CommentForm({
         </p>
       )}
     </form>
+  )
+}
+
+/** Free, as-you-type warning about contact details. No paid check on comments. */
+function PrivacyHint({ text }: { text: string }) {
+  const found = findObviousDetails(text)
+  if (!found.length) return null
+  const kinds = [...new Set(found.map((f) => f.reason.split(',')[0].toLowerCase()))]
+  return (
+    <p className="rounded-md border border-warning/40 bg-warning/10 px-2 py-1 text-xs text-foreground" role="status">
+      This looks like it includes: {kinds.join(', ')}. Comments are public, so consider removing it.
+    </p>
   )
 }
 
@@ -341,6 +355,7 @@ function CommentItem({
             rows={3}
             autoFocus
           />
+          <PrivacyHint text={draft} />
           <div className="flex gap-2">
             <Button type="submit" size="sm" disabled={!writable || pending || !draft.trim()}>
               {pending ? 'Saving…' : 'Save'}

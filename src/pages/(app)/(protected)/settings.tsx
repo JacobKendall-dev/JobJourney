@@ -5,14 +5,20 @@
  * shared across DeepSpace apps, so deleting removes everything you have in
  * JobJourney (the deleteAccount action) and signs you out; it can't remove
  * the sign-in itself.
+ *
+ * Notifications: one switch for the daily comment digest (src/cron.ts),
+ * saved on your own users row.
  */
 
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { signOut, useUser } from 'deepspace'
-import { LogOut, Trash2 } from 'lucide-react'
+import { signOut, useMutations, useQuery, useUser } from 'deepspace'
+import { Bell, LogOut, Trash2 } from 'lucide-react'
 import { PageShell } from '@/components/PageShell'
-import { Button, Input, Label, Modal, useToast } from '@/components/ui'
+import { Button, Input, Label, Modal, Switch, useToast } from '@/components/ui'
+import { useRole } from '@/hooks/useRole'
+import { isTrue } from '@/lib/options'
+import type { UserPrefs } from '@/schemas/users-schema'
 import { callAction } from '@/lib/actions'
 
 const CONFIRM_WORD = 'DELETE'
@@ -41,9 +47,57 @@ export default function SettingsPage() {
           </Button>
         </section>
 
+        <NotificationsSection />
+
         <DeleteAccountSection />
       </div>
     </PageShell>
+  )
+}
+
+function NotificationsSection() {
+  const { userId } = useRole()
+  const { error } = useToast()
+  const { records, status } = useQuery<UserPrefs>('users', { where: { recordId: userId ?? '' } })
+  const { ready, putConfirmed } = useMutations<UserPrefs>('users')
+  const [saving, setSaving] = useState(false)
+  const row = records.find((r) => r.recordId === userId)
+  const on = isTrue(row?.data.notifyComments)
+
+  async function toggle(next: boolean) {
+    if (!userId || !row) return
+    setSaving(true)
+    try {
+      await putConfirmed(userId, { notifyComments: next })
+    } catch {
+      error("Couldn't save your notification setting", 'Try again in a moment.')
+    }
+    setSaving(false)
+  }
+
+  return (
+    <section className="rounded-lg border border-border bg-card p-4" aria-labelledby="notifications-title">
+      <h2 id="notifications-title" className="flex items-center gap-2 text-base font-semibold text-foreground">
+        <Bell className="size-4" aria-hidden />
+        Notifications
+      </h2>
+      <div className="mt-3 flex items-start justify-between gap-4">
+        <div>
+          <Label htmlFor="notify-comments">Daily comment summary</Label>
+          <p id="notify-comments-help" className="mt-1 max-w-prose text-sm text-muted-foreground">
+            One email a day, only when people have commented on your posts. It comes from DeepSpace's notification
+            address and doesn't say which posts are yours to anyone else.
+          </p>
+        </div>
+        <Switch
+          id="notify-comments"
+          aria-describedby="notify-comments-help"
+          checked={on}
+          disabled={!ready || !row || status !== 'ready' || saving}
+          onCheckedChange={(next) => void toggle(next)}
+        />
+      </div>
+    </section>
   )
 }
 

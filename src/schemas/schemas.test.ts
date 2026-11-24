@@ -16,6 +16,7 @@ import {
 } from 'deepspace/server'
 import { schemas } from '../schemas'
 import { companiesSchema } from './companies-schema'
+import { dailyUsageSchema } from './daily-usage-schema'
 import { experiencesSchema } from './experiences-schema'
 import { experienceAuthorsSchema } from './experience-authors-schema'
 import { positionsSchema } from './positions-schema'
@@ -162,5 +163,20 @@ describe('users', () => {
   it('members see only themselves in the user list', () => {
     expect(usersSchema.roster).toBe('read-policy')
     expect(canRead(usersSchema, 'member', record('other'), 'me', noopPermissionContext)).toBe(false)
+  })
+  it('comment emails are off unless turned on', () => {
+    const column = usersSchema.columns.find((c) => c.name === 'notifyComments')
+    expect(column).toMatchObject({ storage: 'number', default: false })
+  })
+})
+
+describe('dailyUsage', () => {
+  it('no role can read or write it, not even admin', () => {
+    for (const role of ['viewer', 'member', 'admin']) {
+      expect(canRead(dailyUsageSchema, role, record(), 'user-a', noopPermissionContext)).toBe(false)
+      expect(canCreate(dailyUsageSchema, role)).toBe(false)
+      expect(canUpdate(dailyUsageSchema, role, record(), 'user-a', noopPermissionContext)).toBe(false)
+      expect(canDelete(dailyUsageSchema, role, record(), 'user-a', noopPermissionContext)).toBe(false)
+    }
   })
 })

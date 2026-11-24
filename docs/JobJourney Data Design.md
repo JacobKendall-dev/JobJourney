@@ -146,9 +146,16 @@ Created only by `postComment`, as the commenter, so `createdBy` is the commenter
 - `userId` (`userBound`, `immutable`)
 - **`uniqueOn: ['experienceId', 'userId']`**
 
-### users (scaffold, one change)
+### users (scaffold, two changes)
 
-- Keep the scaffold's schema. Add **`roster: 'read-policy'`**. Members then see only themselves in the user list, instead of every member's name and `lastSeenAt`. Admins still see everyone. Comments don't depend on the user list, because they store `authorName`.
+- Keep the scaffold's schema. Add **`notifyComments`** (boolean, default off): the daily comment digest emails only people who turned it on in Settings.
+- Add **`roster: 'read-policy'`**. Members then see only themselves in the user list, instead of every member's name and `lastSeenAt`. Admins still see everyone. Comments don't depend on the user list, because they store `authorName`.
+
+### dailyUsage (private, paid-call limits)
+
+- `key` (unique), `count`, `value`. Keys: `privacy:<day>` (whole app), `privacy:<day>:<hashed user id>` (one person) and `digest:last` (when the digest last ran).
+- No role can read or write it, not even admin. Only `reviewPrivacy` and the cron task use it, with the owner tools.
+- The caps themselves live in `src/lib/paid-limits.ts`.
 
 ### Stretch goals
 
@@ -237,11 +244,14 @@ Remember: **record permissions are OFF inside actions** (`X-App-Action: 'true'`)
 | `setCompanyVerified` | Sets `verified` to true or false and sets `verifiedBy` to the admin's ID. `verifiedAt` is stamped by `timestampTrigger`. | The user is an admin (`resolveAppRole`). |
 | `seedSampleData` | Adds the sample companies, positions and 10 sample experiences (every outcome), skipping any that already exist. Sample experiences are written as the owner with fixed ids and **no author row**, so nobody can edit them and admins can delete them. | The user is an admin. Every sample name starts with Example, Sample, Demo or Placeholder. |
 | `deleteAccount` | Removes everything the caller has in JobJourney: their experiences (each with its votes, bookmarks, comments and author row, the same cleanup as `deleteExperience`), their helpful votes (recounting `helpfulCount` on those posts), their bookmarks, and their `users` row. Their comments on other posts become nameless "\[deleted\]" tombstones so replies keep their place. Companies they added stay, as shared listings. The browser then signs them out. | Signed in, and `confirm: true`. Refuses the app owner's account. Every step can be re-run, so a failed delete can be retried. Logged as `caller=[private]` with counts only. The DeepSpace sign-in itself is shared across apps and isn't deleted. |
+| `reviewPrivacy` | Checks a post's story fields for details that could identify someone. Free pattern matching (emails, links, phone numbers, @handles) always runs; a Claude Haiku check (`anthropic/chat-completion`, `max_tokens` 300) runs while the daily caps allow: 50 for the app and 10 per person. Returns `{ flags, checked }`. Only advises: `createExperience` doesn't require it. | Signed in. Logged as `caller=[private]`, never with the text. Any failure (including `insufficient_credits`) returns the pattern results alone. |
 | `deleteCompany` | Deletes a company and its positions (`deleteWhere({ companyId })`). | The user is an admin. **Refuses** if any experience has this `companyId` (query with `limit: 1`), and says how to resolve it: delete or move those experiences first. |
 
 Not actions (handled by permission rules): creating a company from the Companies page, editing or soft-deleting your own comment (the UI sets `deleted: true` and `body: ""` together), and bookmarks.
 
 `commentCount` counts every comment, deleted placeholders included, because soft delete doesn't go through an action.
+
+**Comment digest (cron).** `comment-digest` runs daily at 09:00 UTC (`src/cron.ts`). It counts comments since the last run (skipping deleted ones and the author's own), finds each post's author through `experienceAuthors`, and sends one `email/send` per author with `notifyComments` on: post titles, counts and links, never comment text. At most 10 emails a run; a failed send stops the run. Logs counts only.
 
 **Counters.** Two votes at the same moment can leave `helpfulCount` briefly wrong; the next vote fixes it. If exact counts matter, add a nightly recount in `src/cron.ts`.
 

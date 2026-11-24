@@ -125,6 +125,7 @@ One page, in four short sections:
    - Under anonymous: "Your name isn't stored on the post. Only you can see that you wrote it."
 
 - **Preview:** a live experience card on the right (desktop) or below (mobile) showing exactly how the post will look.
+- **Privacy check:** pressing Share (or Save changes, when the story text changed) first calls `reviewPrivacy`. The button reads "Checking for personal details…". If anything is flagged, a **Check before you share** dialog lists each quote with its reason, with **Edit post** (focuses the story) and **Share anyway**. Pressing the button again with the same text reuses the last result. If the check can't run, the post is shared as normal.
 - **Submit** → `createExperience` → go to the new experience's page with a toast "Thanks for sharing."
 - **Validation:** check in the form for fast feedback (required fields, limits), but the action re-checks everything on the server.
 - **Pre-fill:** `/experiences/new?company=example-technologies` pre-selects the company. It's used by "Share an experience here" on company pages.
@@ -181,6 +182,7 @@ One page, in four short sections:
 ### Settings — `/settings`
 
 - Signed in only. Your name and email, and **Sign out**.
+- **Notifications:** a **Daily comment summary** switch, off by default, saved as `notifyComments` on your own `users` row.
 - **Delete account:** explains what goes, then a dialog where you type DELETE to confirm. It calls `deleteAccount`, then signs you out and goes home.
 - A DeepSpace sign-in is shared by every DeepSpace app, so the app can't delete the sign-in itself. Deleting removes everything you have in JobJourney; signing in again starts an empty profile.
 

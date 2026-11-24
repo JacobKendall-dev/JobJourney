@@ -11,6 +11,7 @@ import { deleteAccount } from './account'
 import { deleteCompany, setCompanyVerified } from './companies'
 import { postComment, toggleHelpful, updateAuthorComment } from './engagement'
 import { createExperience, deleteExperience, updateExperience } from './experiences'
+import { reviewPrivacy } from './privacy'
 import { seedSampleData } from './sample-data'
 
 export const actions: Record<string, ActionHandler<Env>> = {
@@ -24,4 +25,5 @@ export const actions: Record<string, ActionHandler<Env>> = {
   postComment,
   updateAuthorComment,
   deleteAccount,
+  reviewPrivacy,
 }

@@ -13,6 +13,7 @@ import { Lock, Minus, Plus, ShieldCheck } from 'lucide-react'
 import { ExperienceCard } from '@/components/ExperienceCard'
 import { CompanyPicker } from '@/components/share/CompanyPicker'
 import { PositionPicker } from '@/components/share/PositionPicker'
+import { PrivacyReviewModal } from '@/components/share/PrivacyReviewModal'
 import { Button, Label, Textarea } from '@/components/ui'
 import { useLookups } from '@/hooks/useLookups'
 import { useRole } from '@/hooks/useRole'
@@ -37,6 +38,8 @@ import {
   labelFor,
   type InterviewFormat,
 } from '@/lib/options'
+import { callAction } from '@/lib/actions'
+import { postText, type PrivacyFlag, type PrivacyReview } from '@/lib/privacy'
 import { cn } from '@/lib/utils'
 import type { NewCompanyFields } from '@/lib/companies'
 import type { NewPositionFields } from '@/lib/positions'
@@ -153,7 +156,12 @@ export function ExperienceForm({ initial, lockPlace, prefillSlug, submitLabel, o
   const [form, setForm] = useState<FormState>(initial)
   const [submitted, setSubmitted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [checking, setChecking] = useState(false)
   const [serverError, setServerError] = useState<string | null>(null)
+  // The privacy check's flags while its dialog is open, and the last text
+  // checked, so pressing the button again without edits doesn't check twice.
+  const [flags, setFlags] = useState<PrivacyFlag[] | null>(null)
+  const [lastReview, setLastReview] = useState<{ text: string; flags: PrivacyFlag[] } | null>(null)
 
   // ?company=<slug> pre-selects the company once the list has loaded.
   const [prefilled, setPrefilled] = useState(false)
@@ -184,10 +192,41 @@ export function ExperienceForm({ initial, lockPlace, prefillSlug, submitLabel, o
       requestAnimationFrame(() => document.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus())
       return
     }
+    const text = postText(checked.value)
+    // Editing without touching the story fields needs no new check.
+    const unchanged = text === postText(initial)
+    let found: PrivacyFlag[] = []
+    if (!unchanged && text) {
+      if (lastReview?.text === text) {
+        found = lastReview.flags
+      } else {
+        setChecking(true)
+        const review = await callAction<PrivacyReview>('reviewPrivacy', {
+          interviewExperience: checked.value.interviewExperience,
+          advice: checked.value.advice,
+        })
+        setChecking(false)
+        // The check only advises: if it can't run, sharing carries on.
+        found = review.success ? review.data.flags : []
+        setLastReview({ text, flags: found })
+      }
+    }
+    if (found.length) return setFlags(found)
+    await save()
+  }
+
+  async function save() {
+    if (!checked.ok) return
+    setFlags(null)
     setSubmitting(true)
     const error = await onSubmit(checked.value)
     setSubmitting(false)
     if (error) setServerError(error)
+  }
+
+  function backToEditing() {
+    setFlags(null)
+    requestAnimationFrame(() => document.getElementById('share-interview')?.focus())
   }
 
   const { year: thisYear, month: thisMonth } = localNow()
@@ -491,15 +530,16 @@ export function ExperienceForm({ initial, lockPlace, prefillSlug, submitLabel, o
 
           <div className="flex justify-end gap-2">
             {onCancel && (
-              <Button type="button" variant="ghost" size="lg" onClick={onCancel} disabled={submitting}>
+              <Button type="button" variant="ghost" size="lg" onClick={onCancel} disabled={submitting || checking}>
                 Cancel
               </Button>
             )}
-            <Button type="submit" size="lg" loading={submitting}>
-              {submitLabel}
+            <Button type="submit" size="lg" loading={submitting || checking}>
+              {checking ? 'Checking for personal details…' : submitLabel}
             </Button>
           </div>
         </form>
+        <PrivacyReviewModal flags={flags} submitLabel={submitLabel} onEdit={backToEditing} onContinue={() => void save()} />
 
         <aside aria-label="Preview" className="lg:sticky lg:top-6 lg:self-start">
           <h2 className="mb-2 text-sm font-semibold text-muted-foreground">Preview</h2>

@@ -1,8 +1,17 @@
 import { USERS_COLUMNS, type CollectionSchema } from 'deepspace/schema'
 
+/** The app's own fields on a user's row (the SDK adds email, name and the rest). */
+export interface UserPrefs {
+  /** Daily email when people comment on your posts. Off unless turned on. Stored as 0 / 1. */
+  notifyComments?: 0 | 1 | boolean
+}
+
 export const usersSchema: CollectionSchema = {
   name: 'users',
-  columns: [...USERS_COLUMNS],
+  columns: [
+    ...USERS_COLUMNS,
+    { name: 'notifyComments', storage: 'number', interpretation: { kind: 'boolean' }, default: false },
+  ],
   permissions: {
     viewer: { read: 'own', create: false, update: 'own', delete: false },
     member: { read: 'own', create: false, update: 'own', delete: false },
